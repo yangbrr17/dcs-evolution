@@ -23,25 +23,39 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const tagRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLElement | null>(null);
+  const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!isEditMode) return;
+    if (!isEditMode || !tagRef.current) return;
     
     e.preventDefault();
     e.stopPropagation();
+    
+    const container = tagRef.current.parentElement as HTMLElement;
+    if (!container) return;
+    
+    const containerRect = container.getBoundingClientRect();
+    const tagRect = tagRef.current.getBoundingClientRect();
+    
+    // Calculate offset from mouse to tag center
+    const tagCenterX = tagRect.left + tagRect.width / 2;
+    const tagCenterY = tagRect.top + tagRect.height / 2;
+    offsetRef.current = {
+      x: e.clientX - tagCenterX,
+      y: e.clientY - tagCenterY,
+    };
+    
     setIsDragging(true);
-    containerRef.current = tagRef.current?.parentElement as HTMLElement;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!containerRef.current) return;
+      const rect = container.getBoundingClientRect();
       
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = ((moveEvent.clientX - rect.left) / rect.width) * 100;
-      const y = ((moveEvent.clientY - rect.top) / rect.height) * 100;
+      // Apply offset so tag doesn't jump to cursor
+      const x = ((moveEvent.clientX - offsetRef.current.x - rect.left) / rect.width) * 100;
+      const y = ((moveEvent.clientY - offsetRef.current.y - rect.top) / rect.height) * 100;
       
-      const clampedX = Math.max(0, Math.min(95, x));
-      const clampedY = Math.max(0, Math.min(95, y));
+      const clampedX = Math.max(2, Math.min(98, x));
+      const clampedY = Math.max(2, Math.min(98, y));
       
       onPositionChange(tag.id, { x: clampedX, y: clampedY });
     };
@@ -59,20 +73,20 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
   const getStatusDotClass = () => {
     switch (tag.status) {
       case 'alarm':
-        return 'bg-dcs-alarm animate-alarm-pulse';
+        return 'status-dot-alarm';
       case 'warning':
-        return 'bg-dcs-warning animate-warning-pulse';
+        return 'status-dot-warning';
       default:
-        return 'bg-dcs-normal';
+        return 'status-dot-normal';
     }
   };
 
   const getStatusBorderClass = () => {
     switch (tag.status) {
       case 'alarm':
-        return 'border-dcs-alarm/50';
+        return 'border-[hsl(var(--status-alarm)/0.5)]';
       case 'warning':
-        return 'border-dcs-warning/50';
+        return 'border-[hsl(var(--status-warning)/0.5)]';
       default:
         return 'border-border/50';
     }
@@ -99,7 +113,7 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
       onMouseDown={isEditMode ? handleMouseDown : undefined}
     >
       {/* Status Dot */}
-      <div className={cn('w-2.5 h-2.5 rounded-full', getStatusDotClass())} />
+      <div className={cn('status-dot', getStatusDotClass())} />
       
       {/* Tag Name */}
       <span className="text-xs font-medium text-foreground whitespace-nowrap">
@@ -134,9 +148,9 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
             <span className="text-sm font-semibold text-foreground">{tag.name}</span>
             <span className={cn(
               'text-xs px-1.5 py-0.5 rounded',
-              tag.status === 'alarm' && 'bg-dcs-alarm/20 text-dcs-alarm',
-              tag.status === 'warning' && 'bg-dcs-warning/20 text-dcs-warning',
-              tag.status === 'normal' && 'bg-dcs-normal/20 text-dcs-normal'
+              tag.status === 'alarm' && 'bg-[hsl(var(--status-alarm)/0.2)] text-[hsl(var(--status-alarm))]',
+              tag.status === 'warning' && 'bg-[hsl(var(--status-warning)/0.2)] text-[hsl(var(--status-warning))]',
+              tag.status === 'normal' && 'bg-[hsl(var(--status-normal)/0.2)] text-[hsl(var(--status-normal))]'
             )}>
               {tag.status === 'normal' ? '正常' : tag.status === 'warning' ? '警告' : '报警'}
             </span>
@@ -155,7 +169,7 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
             </div>
             <div>
               <span className="text-xs text-muted-foreground">设定值</span>
-              <p className="text-sm font-mono text-dcs-setpoint">
+              <p className="text-sm font-mono dcs-setpoint">
                 {tag.setpoint.toFixed(1)}
               </p>
             </div>
@@ -163,9 +177,9 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
           
           {/* Prediction */}
           <div className="flex items-center gap-1 text-xs">
-            <TrendingUp className="w-3 h-3 text-dcs-prediction" />
+            <TrendingUp className="w-3 h-3 dcs-prediction" />
             <span className="text-muted-foreground">预测:</span>
-            <span className="font-mono text-dcs-prediction">{tag.predictedValue.toFixed(1)}</span>
+            <span className="font-mono dcs-prediction">{tag.predictedValue.toFixed(1)}</span>
           </div>
           
           {/* Click hint */}
