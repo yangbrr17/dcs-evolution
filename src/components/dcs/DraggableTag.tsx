@@ -1,7 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { TagData } from '@/types/dcs';
-import { GripVertical, TrendingUp, Settings } from 'lucide-react';
+import { GripVertical, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
 
 interface DraggableTagProps {
   tag: TagData;
@@ -24,6 +29,7 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
     if (!isEditMode) return;
     
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
     containerRef.current = tagRef.current?.parentElement as HTMLElement;
 
@@ -34,7 +40,6 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
       const x = ((moveEvent.clientX - rect.left) / rect.width) * 100;
       const y = ((moveEvent.clientY - rect.top) / rect.height) * 100;
       
-      // Clamp values between 0 and 100
       const clampedX = Math.max(0, Math.min(95, x));
       const clampedY = Math.max(0, Math.min(95, y));
       
@@ -51,92 +56,125 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  const getStatusClass = () => {
-    switch (tag.status) {
-      case 'alarm':
-        return 'dcs-tag-alarm';
-      case 'warning':
-        return 'dcs-tag-warning';
-      default:
-        return 'dcs-tag-normal';
-    }
-  };
-
   const getStatusDotClass = () => {
     switch (tag.status) {
       case 'alarm':
-        return 'status-dot-alarm';
+        return 'bg-dcs-alarm animate-alarm-pulse';
       case 'warning':
-        return 'status-dot-warning';
+        return 'bg-dcs-warning animate-warning-pulse';
       default:
-        return 'status-dot-normal';
+        return 'bg-dcs-normal';
     }
   };
 
-  return (
+  const getStatusBorderClass = () => {
+    switch (tag.status) {
+      case 'alarm':
+        return 'border-dcs-alarm/50';
+      case 'warning':
+        return 'border-dcs-warning/50';
+      default:
+        return 'border-border/50';
+    }
+  };
+
+  const TagContent = (
     <div
       ref={tagRef}
       className={cn(
-        'dcs-tag absolute min-w-[140px] select-none transition-shadow',
-        getStatusClass(),
-        isDragging && 'shadow-xl z-50 cursor-grabbing',
-        isEditMode && !isDragging && 'cursor-grab hover:shadow-lg',
-        !isEditMode && 'cursor-pointer hover:shadow-md'
+        'absolute flex items-center gap-1.5 px-2 py-1 rounded-full',
+        'bg-card/80 backdrop-blur-sm border select-none',
+        'transition-all duration-200',
+        getStatusBorderClass(),
+        isDragging && 'shadow-xl z-50 cursor-grabbing scale-110',
+        isEditMode && !isDragging && 'cursor-grab hover:shadow-lg hover:scale-105',
+        !isEditMode && 'cursor-pointer hover:shadow-md hover:bg-card'
       )}
       style={{
         left: `${tag.position.x}%`,
         top: `${tag.position.y}%`,
         transform: 'translate(-50%, -50%)',
       }}
-      onClick={() => !isEditMode && onClick(tag)}
+      onClick={() => !isEditMode && !isDragging && onClick(tag)}
+      onMouseDown={isEditMode ? handleMouseDown : undefined}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-2 py-1 border-b border-border/50">
-        <div className="flex items-center gap-1.5">
-          <div className={cn('status-dot', getStatusDotClass())} />
-          <span className="text-xs font-medium text-foreground">{tag.name}</span>
-        </div>
-        {isEditMode && (
-          <div
-            className="drag-handle p-0.5"
-            onMouseDown={handleMouseDown}
-          >
-            <GripVertical className="w-3 h-3" />
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="px-2 py-1.5 space-y-0.5">
-        {/* Current Value */}
-        <div className="flex items-baseline justify-between">
-          <span className="dcs-value text-lg">
-            {tag.currentValue.toFixed(1)}
-          </span>
-          <span className="text-xs text-muted-foreground">{tag.unit}</span>
-        </div>
-
-        {/* Setpoint */}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">SP:</span>
-          <span className="dcs-setpoint">{tag.setpoint.toFixed(1)}</span>
-        </div>
-
-        {/* Predicted Value */}
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-0.5 text-muted-foreground">
-            <TrendingUp className="w-3 h-3" />
-            <span>预测:</span>
-          </div>
-          <span className="dcs-prediction">{tag.predictedValue.toFixed(1)}</span>
-        </div>
-      </div>
-
-      {/* Description tooltip on hover */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-popover border border-border rounded text-xs text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        {tag.description}
-      </div>
+      {/* Status Dot */}
+      <div className={cn('w-2.5 h-2.5 rounded-full', getStatusDotClass())} />
+      
+      {/* Tag Name */}
+      <span className="text-xs font-medium text-foreground whitespace-nowrap">
+        {tag.name}
+      </span>
+      
+      {/* Drag Handle in Edit Mode */}
+      {isEditMode && (
+        <GripVertical className="w-3 h-3 text-muted-foreground" />
+      )}
     </div>
+  );
+
+  // In edit mode, don't show hover card
+  if (isEditMode) {
+    return TagContent;
+  }
+
+  return (
+    <HoverCard openDelay={100} closeDelay={50}>
+      <HoverCardTrigger asChild>
+        {TagContent}
+      </HoverCardTrigger>
+      <HoverCardContent 
+        className="w-48 p-3 bg-card border-border"
+        side="top"
+        sideOffset={8}
+      >
+        <div className="space-y-2">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-foreground">{tag.name}</span>
+            <span className={cn(
+              'text-xs px-1.5 py-0.5 rounded',
+              tag.status === 'alarm' && 'bg-dcs-alarm/20 text-dcs-alarm',
+              tag.status === 'warning' && 'bg-dcs-warning/20 text-dcs-warning',
+              tag.status === 'normal' && 'bg-dcs-normal/20 text-dcs-normal'
+            )}>
+              {tag.status === 'normal' ? '正常' : tag.status === 'warning' ? '警告' : '报警'}
+            </span>
+          </div>
+          
+          {/* Description */}
+          <p className="text-xs text-muted-foreground">{tag.description}</p>
+          
+          {/* Values */}
+          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50">
+            <div>
+              <span className="text-xs text-muted-foreground">当前值</span>
+              <p className="text-sm font-mono font-semibold text-foreground">
+                {tag.currentValue.toFixed(1)} <span className="text-xs text-muted-foreground">{tag.unit}</span>
+              </p>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground">设定值</span>
+              <p className="text-sm font-mono text-dcs-setpoint">
+                {tag.setpoint.toFixed(1)}
+              </p>
+            </div>
+          </div>
+          
+          {/* Prediction */}
+          <div className="flex items-center gap-1 text-xs">
+            <TrendingUp className="w-3 h-3 text-dcs-prediction" />
+            <span className="text-muted-foreground">预测:</span>
+            <span className="font-mono text-dcs-prediction">{tag.predictedValue.toFixed(1)}</span>
+          </div>
+          
+          {/* Click hint */}
+          <p className="text-xs text-muted-foreground/60 text-center pt-1 border-t border-border/30">
+            点击查看详细趋势
+          </p>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 };
 
