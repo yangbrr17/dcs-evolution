@@ -48,6 +48,12 @@ const ProcessImageBackground: React.FC<ProcessImageBackgroundProps> = ({
     setIsDragOver(false);
   };
 
+  const handleButtonClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInputRef.current?.click();
+  };
+
   return (
     <div
       className={cn(
@@ -67,14 +73,15 @@ const ProcessImageBackground: React.FC<ProcessImageBackgroundProps> = ({
           style={{ backgroundColor: 'hsl(var(--background))' }}
         />
       ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+        /* Empty state - show upload prompt ABOVE the tag overlay */
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground z-20 pointer-events-none">
           <ImageIcon className="w-16 h-16 mb-4 opacity-30" />
           <p className="text-lg mb-2">暂无流程图</p>
           <p className="text-sm mb-4">上传您的工厂/装置照片作为背景</p>
           <Button
             variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            className="gap-2"
+            onClick={handleButtonClick}
+            className="gap-2 pointer-events-auto"
           >
             <Upload className="w-4 h-4" />
             上传图片
@@ -84,11 +91,11 @@ const ProcessImageBackground: React.FC<ProcessImageBackgroundProps> = ({
 
       {/* Image controls in edit mode */}
       {isEditMode && imageUrl && (
-        <div className="absolute top-2 right-2 flex gap-2 z-10">
+        <div className="absolute top-2 right-2 flex gap-2 z-30">
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleButtonClick}
             className="gap-1 text-xs"
           >
             <Upload className="w-3 h-3" />
@@ -115,17 +122,19 @@ const ProcessImageBackground: React.FC<ProcessImageBackgroundProps> = ({
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleFileSelect(file);
+          // Reset input value so same file can be selected again
+          e.target.value = '';
         }}
       />
 
-      {/* Tag overlay */}
-      <div className="absolute inset-0">
+      {/* Tag overlay - lower z-index than upload controls */}
+      <div className="absolute inset-0 z-10">
         {children}
       </div>
 
       {/* Drag overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 bg-primary/10 flex items-center justify-center z-20">
+        <div className="absolute inset-0 bg-primary/10 flex items-center justify-center z-40">
           <div className="bg-card border border-primary rounded-lg px-6 py-4 text-center">
             <Upload className="w-8 h-8 mx-auto mb-2 text-primary" />
             <p className="text-foreground">释放以上传图片</p>
