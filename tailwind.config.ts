@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +61,23 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // DCS Status Colors
+        status: {
+          normal: "hsl(var(--status-normal))",
+          warning: "hsl(var(--status-warning))",
+          alarm: "hsl(var(--status-alarm))",
+          info: "hsl(var(--status-info))",
+        },
+        // DCS Specific Colors
+        dcs: {
+          panel: "hsl(var(--dcs-panel))",
+          "panel-border": "hsl(var(--dcs-panel-border))",
+          header: "hsl(var(--dcs-header))",
+          grid: "hsl(var(--dcs-grid))",
+          value: "hsl(var(--dcs-value))",
+          setpoint: "hsl(var(--dcs-setpoint))",
+          prediction: "hsl(var(--dcs-prediction))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +86,27 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "pulse-warning": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
+        },
+        "pulse-alarm": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.8", transform: "scale(1.02)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-warning": "pulse-warning 1.5s ease-in-out infinite",
+        "pulse-alarm": "pulse-alarm 0.8s ease-in-out infinite",
       },
     },
   },
