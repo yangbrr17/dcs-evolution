@@ -48,11 +48,17 @@ export const fetchAlarms = async (limit: number = 50): Promise<Alarm[]> => {
   }));
 };
 
-// Acknowledge alarm in database
+// Acknowledge alarm in database (requires operator or admin role)
 export const acknowledgeAlarm = async (
   alarmId: string,
-  acknowledgedBy: string
+  acknowledgedBy: string,
+  userRole?: string
 ): Promise<void> => {
+  // Defense in depth: validate role client-side (RLS enforces server-side)
+  if (userRole && userRole !== 'admin' && userRole !== 'operator') {
+    throw new Error('Unauthorized: Only operators and admins can acknowledge alarms');
+  }
+
   const { error } = await supabase
     .from('alarms')
     .update({
@@ -64,6 +70,7 @@ export const acknowledgeAlarm = async (
 
   if (error) {
     console.error('Failed to acknowledge alarm:', error);
+    throw new Error('Failed to acknowledge alarm');
   }
 };
 
