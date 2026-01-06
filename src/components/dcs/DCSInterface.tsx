@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { TagData, Alarm, ProcessArea } from '@/types/dcs';
 import { createInitialTags, updateTagData, generateAlarm, createProcessAreas } from '@/services/mockDataService';
+import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
 import ProcessImageBackground from './ProcessImageBackground';
 import DraggableTag from './DraggableTag';
 import TagDetailModal from './TagDetailModal';
@@ -32,6 +33,35 @@ const DCSInterface: React.FC = () => {
     [allTags, currentArea]
   );
 
+  // Load alarms from database on mount
+  useEffect(() => {
+    const loadAlarms = async () => {
+      const dbAlarms = await fetchAlarms(50);
+      setAlarms(dbAlarms);
+    };
+    loadAlarms();
+  }, []);
+
+  // Subscribe to realtime alarm updates
+  useEffect(() => {
+    const unsubscribe = subscribeToAlarms(
+      (newAlarm) => {
+        setAlarms((prev) => {
+          // Avoid duplicates
+          if (prev.some((a) => a.id === newAlarm.id)) return prev;
+          return [newAlarm, ...prev].slice(0, 50);
+        });
+      },
+      (updatedAlarm) => {
+        setAlarms((prev) =>
+          prev.map((a) => (a.id === updatedAlarm.id ? updatedAlarm : a))
+        );
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
   // Real-time data update
   useEffect(() => {
     if (!isRunning) return;
@@ -45,7 +75,8 @@ const DCSInterface: React.FC = () => {
           // Check for new alarms
           const alarm = generateAlarm(updatedTag, previousStatus);
           if (alarm) {
-            setAlarms((prev) => [alarm, ...prev].slice(0, 50));
+            // Save to database
+            saveAlarm(alarm);
             toast({
               title: alarm.type === 'alarm' ? '⚠️ 报警' : '⚡ 警告',
               description: alarm.message,
@@ -68,7 +99,11 @@ const DCSInterface: React.FC = () => {
     );
   }, []);
 
-  const handleAcknowledgeAlarm = useCallback((alarmId: string, acknowledgedBy: string) => {
+  const handleAcknowledgeAlarm = useCallback(async (alarmId: string, acknowledgedBy: string) => {
+    // Update in database
+    await acknowledgeAlarm(alarmId, acknowledgedBy);
+    
+    // Optimistic UI update
     setAlarms((prev) =>
       prev.map((alarm) =>
         alarm.id === alarmId
