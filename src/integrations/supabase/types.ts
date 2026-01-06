@@ -107,6 +107,50 @@ export type Database = {
         }
         Relationships: []
       }
+      shift_events: {
+        Row: {
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          operator_id: string
+          operator_name: string
+          severity: string
+          shift_id: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          id?: string
+          operator_id: string
+          operator_name: string
+          severity?: string
+          shift_id: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          id?: string
+          operator_id?: string
+          operator_name?: string
+          severity?: string
+          shift_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_events_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           alarm_summary: Json | null

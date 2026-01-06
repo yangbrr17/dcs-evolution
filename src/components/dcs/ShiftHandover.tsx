@@ -13,11 +13,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Clock, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle, FileText, BookOpen, Plus } from 'lucide-react';
 import { Alarm } from '@/types/dcs';
 import { getCurrentShift, endShift, startShift, AlarmSummary, Shift } from '@/services/shiftService';
 import { logOperation } from '@/services/operationLogService';
+import { getShiftEvents, addShiftEvent, ShiftEvent } from '@/services/shiftEventService';
 import { useToast } from '@/hooks/use-toast';
+import ShiftEventForm from './ShiftEventForm';
+import ShiftEventList from './ShiftEventList';
 
 interface ShiftHandoverProps {
   isOpen: boolean;
@@ -30,11 +33,19 @@ const ShiftHandover: React.FC<ShiftHandoverProps> = ({ isOpen, onClose, alarms }
   const { toast } = useToast();
   const [handoverNotes, setHandoverNotes] = useState('');
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  const [shiftEvents, setShiftEvents] = useState<ShiftEvent[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [isAddingEvent, setIsAddingEvent] = useState(false);
 
   useEffect(() => {
     if (isOpen && user) {
-      getCurrentShift(user.id).then(setCurrentShift);
+      getCurrentShift(user.id).then((shift) => {
+        setCurrentShift(shift);
+        if (shift) {
+          getShiftEvents(shift.id).then(setShiftEvents);
+        }
+      });
     }
   }, [isOpen, user]);
 
@@ -47,6 +58,45 @@ const ShiftHandover: React.FC<ShiftHandoverProps> = ({ isOpen, onClose, alarms }
       alarm: alarms.filter(a => a.type === 'alarm').length,
       warning: alarms.filter(a => a.type === 'warning').length,
     },
+  };
+
+  const handleAddEvent = async (eventData: {
+    event_type: string;
+    title: string;
+    description: string;
+    severity: string;
+  }) => {
+    if (!user || !profile || !currentShift) return;
+
+    setIsAddingEvent(true);
+    try {
+      const newEvent = await addShiftEvent({
+        shift_id: currentShift.id,
+        operator_id: user.id,
+        operator_name: profile.name,
+        event_type: eventData.event_type as ShiftEvent['event_type'],
+        title: eventData.title,
+        description: eventData.description || null,
+        severity: eventData.severity as ShiftEvent['severity'],
+      });
+
+      if (newEvent) {
+        setShiftEvents((prev) => [newEvent, ...prev]);
+        setShowEventForm(false);
+        toast({
+          title: '大事记已添加',
+          description: eventData.title,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: '添加失败',
+        description: '添加大事记时发生错误',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingEvent(false);
+    }
   };
 
   const handleHandover = async () => {
@@ -68,6 +118,7 @@ const ShiftHandover: React.FC<ShiftHandoverProps> = ({ isOpen, onClose, alarms }
         newShiftId: newShift?.id,
         handoverNotes,
         alarmSummary,
+        eventCount: shiftEvents.length,
       });
 
       toast({
@@ -76,6 +127,7 @@ const ShiftHandover: React.FC<ShiftHandoverProps> = ({ isOpen, onClose, alarms }
       });
 
       setHandoverNotes('');
+      setShiftEvents([]);
       onClose();
     } catch (error) {
       toast({
@@ -90,7 +142,7 @@ const ShiftHandover: React.FC<ShiftHandoverProps> = ({ isOpen, onClose, alarms }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
@@ -117,6 +169,46 @@ const ShiftHandover: React.FC<ShiftHandoverProps> = ({ isOpen, onClose, alarms }
               </div>
             </div>
           )}
+
+          <Separator />
+
+          {/* Major Events Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-sm font-medium flex items-center gap-1">
+                <BookOpen className="w-4 h-4" />
+                大事记
+                {shiftEvents.length > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs">
+                    {shiftEvents.length}
+                  </Badge>
+                )}
+              </Label>
+              {currentShift && !showEventForm && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowEventForm(true)}
+                  className="h-7 text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  添加
+                </Button>
+              )}
+            </div>
+
+            {showEventForm && (
+              <ShiftEventForm
+                onSubmit={handleAddEvent}
+                onCancel={() => setShowEventForm(false)}
+                isSubmitting={isAddingEvent}
+              />
+            )}
+
+            {!showEventForm && (
+              <ShiftEventList events={shiftEvents} maxHeight="180px" />
+            )}
+          </div>
 
           <Separator />
 
