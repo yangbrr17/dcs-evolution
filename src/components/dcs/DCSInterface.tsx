@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { TagData, Alarm, ProcessArea } from '@/types/dcs';
 import { createInitialTags, updateTagData, generateAlarm, createProcessAreas } from '@/services/mockDataService';
 import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
@@ -62,41 +62,54 @@ const DCSInterface: React.FC = () => {
     return unsubscribe;
   }, []);
 
+  // Ref to collect alarms during tag updates
+  const pendingAlarmsRef = useRef<Alarm[]>([]);
+
   // Real-time data update
   useEffect(() => {
     if (!isRunning) return;
 
     const interval = setInterval(() => {
+      pendingAlarmsRef.current = [];
+      
       setAllTags((prevTags) => {
-        const newTags = prevTags.map((tag) => {
+        return prevTags.map((tag) => {
           const previousStatus = tag.status;
           const updatedTag = updateTagData(tag);
           
           // Check for new alarms
           const alarm = generateAlarm(updatedTag, previousStatus);
           if (alarm) {
-            // Save to database and update local state with DB-generated ID
-            saveAlarm(alarm).then((dbId) => {
-              if (dbId) {
-                const dbAlarm = { ...alarm, id: dbId };
-                setAlarms((prev) => {
-                  // Avoid duplicates
-                  if (prev.some((a) => a.id === dbId)) return prev;
-                  return [dbAlarm, ...prev].slice(0, 50);
-                });
-              }
-            });
+            pendingAlarmsRef.current.push(alarm);
+          }
+          
+          return updatedTag;
+        });
+      });
+
+      // Process alarms after state update (use setTimeout to ensure state is updated)
+      setTimeout(async () => {
+        const alarmsToProcess = [...pendingAlarmsRef.current];
+        for (const alarm of alarmsToProcess) {
+          try {
+            const dbId = await saveAlarm(alarm);
+            if (dbId) {
+              const dbAlarm = { ...alarm, id: dbId };
+              setAlarms((prev) => {
+                if (prev.some((a) => a.id === dbId)) return prev;
+                return [dbAlarm, ...prev].slice(0, 50);
+              });
+            }
             toast({
               title: alarm.type === 'alarm' ? '⚠️ 报警' : '⚡ 警告',
               description: alarm.message,
               variant: alarm.type === 'alarm' ? 'destructive' : 'default',
             });
+          } catch (error) {
+            console.error('Failed to save alarm:', error);
           }
-          
-          return updatedTag;
-        });
-        return newTags;
-      });
+        }
+      }, 0);
     }, 2000);
 
     return () => clearInterval(interval);
