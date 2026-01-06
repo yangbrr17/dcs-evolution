@@ -2,17 +2,25 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { TagData, Alarm, ProcessArea } from '@/types/dcs';
 import { createInitialTags, updateTagData, generateAlarm, createProcessAreas } from '@/services/mockDataService';
 import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
+import { logOperation } from '@/services/operationLogService';
+import { startShift } from '@/services/shiftService';
+import { useAuth } from '@/contexts/AuthContext';
 import ProcessImageBackground from './ProcessImageBackground';
 import DraggableTag from './DraggableTag';
 import TagDetailModal from './TagDetailModal';
 import AlarmPanel from './AlarmPanel';
 import MonitoringPanel from './MonitoringPanel';
 import AreaNavigation from './AreaNavigation';
+import UserMenu from './UserMenu';
+import ShiftHandover from './ShiftHandover';
+import OperationLogPanel from './OperationLogPanel';
 import { Button } from '@/components/ui/button';
-import { Settings, Play, Pause } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Settings, Play, Pause, Bell, Clock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const DCSInterface: React.FC = () => {
+  const { user, profile, canEdit } = useAuth();
   const [allTags, setAllTags] = useState<TagData[]>(createInitialTags);
   const [areas, setAreas] = useState<ProcessArea[]>(createProcessAreas);
   const [currentAreaId, setCurrentAreaId] = useState<string>('overview');
@@ -20,6 +28,7 @@ const DCSInterface: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isRunning, setIsRunning] = useState(true);
   const [selectedTag, setSelectedTag] = useState<TagData | null>(null);
+  const [showShiftHandover, setShowShiftHandover] = useState(false);
 
   // Get current area
   const currentArea = useMemo(() => 
@@ -32,6 +41,15 @@ const DCSInterface: React.FC = () => {
     allTags.filter((tag) => currentArea.tagIds.includes(tag.id)),
     [allTags, currentArea]
   );
+
+  // Start shift on login
+  useEffect(() => {
+    if (user && profile) {
+      // Log login and start shift
+      logOperation(user.id, profile.name, 'login', {});
+      startShift(user.id, profile.name);
+    }
+  }, [user, profile]);
 
   // Load alarms from database on mount
   useEffect(() => {
@@ -119,7 +137,17 @@ const DCSInterface: React.FC = () => {
     setAllTags((prev) =>
       prev.map((tag) => (tag.id === id ? { ...tag, position } : tag))
     );
-  }, []);
+    
+    // Log the operation
+    if (user && profile) {
+      const tag = allTags.find(t => t.id === id);
+      logOperation(user.id, profile.name, 'tag_position_change', {
+        tagId: id,
+        tagName: tag?.name,
+        newPosition: position,
+      }, currentAreaId);
+    }
+  }, [user, profile, allTags, currentAreaId]);
 
   const handleAcknowledgeAlarm = useCallback(async (alarmId: string, acknowledgedBy: string) => {
     // Update in database
@@ -133,7 +161,18 @@ const DCSInterface: React.FC = () => {
           : alarm
       )
     );
-  }, []);
+
+    // Log the operation
+    if (user && profile) {
+      const alarm = alarms.find(a => a.id === alarmId);
+      logOperation(user.id, profile.name, 'alarm_acknowledge', {
+        alarmId,
+        tagName: alarm?.tagName,
+        message: alarm?.message,
+        acknowledgedBy,
+      }, currentAreaId);
+    }
+  }, [user, profile, alarms, currentAreaId]);
 
   const handleImageUpload = (url: string) => {
     setAreas((prev) =>
@@ -142,6 +181,14 @@ const DCSInterface: React.FC = () => {
       )
     );
     toast({ title: '图片已上传', description: `已为"${currentArea.name}"设置流程图` });
+    
+    // Log the operation
+    if (user && profile) {
+      logOperation(user.id, profile.name, 'image_upload', {
+        areaId: currentAreaId,
+        areaName: currentArea.name,
+      }, currentAreaId);
+    }
   };
 
   const handleImageRemove = () => {
@@ -150,7 +197,28 @@ const DCSInterface: React.FC = () => {
         area.id === currentAreaId ? { ...area, imageUrl: null } : area
       )
     );
+    
+    // Log the operation
+    if (user && profile) {
+      logOperation(user.id, profile.name, 'image_remove', {
+        areaId: currentAreaId,
+        areaName: currentArea.name,
+      }, currentAreaId);
+    }
   };
+
+  const handleModeChange = (running: boolean) => {
+    setIsRunning(running);
+    
+    // Log the operation
+    if (user && profile) {
+      logOperation(user.id, profile.name, 'mode_change', {
+        mode: running ? 'running' : 'paused',
+      }, currentAreaId);
+    }
+  };
+
+  const activeAlarms = alarms.filter(a => !a.acknowledged);
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -163,21 +231,28 @@ const DCSInterface: React.FC = () => {
           <Button
             size="sm"
             variant={isRunning ? 'secondary' : 'default'}
-            onClick={() => setIsRunning(!isRunning)}
+            onClick={() => handleModeChange(!isRunning)}
             className="gap-1"
           >
             {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
             {isRunning ? '暂停' : '运行'}
           </Button>
-          <Button
-            size="sm"
-            variant={isEditMode ? 'default' : 'outline'}
-            onClick={() => setIsEditMode(!isEditMode)}
-            className="gap-1"
-          >
-            <Settings className="w-3 h-3" />
-            {isEditMode ? '完成编辑' : '编辑模式'}
-          </Button>
+          
+          {/* Edit Mode - Only for operators and admins */}
+          {canEdit() && (
+            <Button
+              size="sm"
+              variant={isEditMode ? 'default' : 'outline'}
+              onClick={() => setIsEditMode(!isEditMode)}
+              className="gap-1"
+            >
+              <Settings className="w-3 h-3" />
+              {isEditMode ? '完成编辑' : '编辑模式'}
+            </Button>
+          )}
+          
+          {/* User Menu */}
+          <UserMenu onShiftHandover={() => setShowShiftHandover(true)} />
         </div>
       </header>
 
@@ -219,12 +294,39 @@ const DCSInterface: React.FC = () => {
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-72 border-l border-border flex flex-col">
+        <div className="w-80 border-l border-border flex flex-col">
           <div className="flex-1 overflow-hidden">
             <MonitoringPanel tags={currentTags} onTagClick={setSelectedTag} />
           </div>
-          <div className="h-64 border-t border-border">
-            <AlarmPanel alarms={alarms} onAcknowledge={handleAcknowledgeAlarm} />
+          
+          {/* Tabs for Alarms and Operation Logs */}
+          <div className="h-80 border-t border-border">
+            <Tabs defaultValue="alarms" className="h-full flex flex-col">
+              <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
+                <TabsTrigger value="alarms" className="gap-1 text-xs">
+                  <Bell className="w-3 h-3" />
+                  报警
+                  {activeAlarms.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-status-alarm/20 text-status-alarm rounded">
+                      {activeAlarms.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="logs" className="gap-1 text-xs">
+                  <Clock className="w-3 h-3" />
+                  操作日志
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="alarms" className="flex-1 m-0 overflow-hidden">
+                <AlarmPanel 
+                  alarms={alarms} 
+                  onAcknowledge={handleAcknowledgeAlarm}
+                />
+              </TabsContent>
+              <TabsContent value="logs" className="flex-1 m-0 overflow-hidden p-2">
+                <OperationLogPanel />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
@@ -234,6 +336,13 @@ const DCSInterface: React.FC = () => {
         tag={selectedTag}
         open={!!selectedTag}
         onClose={() => setSelectedTag(null)}
+      />
+
+      {/* Shift Handover Modal */}
+      <ShiftHandover
+        isOpen={showShiftHandover}
+        onClose={() => setShowShiftHandover(false)}
+        alarms={alarms}
       />
     </div>
   );

@@ -50,15 +50,142 @@ export type Database = {
         }
         Relationships: []
       }
+      operation_logs: {
+        Row: {
+          action: string
+          area_id: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          action: string
+          area_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          action?: string
+          area_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          department: string | null
+          employee_id: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          employee_id?: string | null
+          id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          employee_id?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shifts: {
+        Row: {
+          alarm_summary: Json | null
+          created_at: string
+          end_time: string | null
+          handover_notes: string | null
+          id: string
+          operator_id: string
+          operator_name: string
+          shift_type: string
+          start_time: string
+          status: string
+        }
+        Insert: {
+          alarm_summary?: Json | null
+          created_at?: string
+          end_time?: string | null
+          handover_notes?: string | null
+          id?: string
+          operator_id: string
+          operator_name: string
+          shift_type: string
+          start_time?: string
+          status?: string
+        }
+        Update: {
+          alarm_summary?: Json | null
+          created_at?: string
+          end_time?: string | null
+          handover_notes?: string | null
+          id?: string
+          operator_id?: string
+          operator_name?: string
+          shift_type?: string
+          start_time?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "operator" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -185,6 +312,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "operator", "viewer"],
+    },
   },
 } as const

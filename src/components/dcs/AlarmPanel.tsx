@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Alarm } from '@/types/dcs';
+import { useAuth } from '@/contexts/AuthContext';
 import { Bell, AlertTriangle, AlertCircle, Check, Clock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,9 +18,8 @@ interface AlarmPanelProps {
   onAcknowledge: (alarmId: string, acknowledgedBy: string) => void;
 }
 
-const PRESET_CONFIRMERS = ['吕菲亚', '殷凯', '赵劲松', '杨博睿'];
-
 const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
+  const { profile, canAcknowledge } = useAuth();
   const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false);
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
 
@@ -35,13 +35,14 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
   };
 
   const handleAcknowledgeClick = (alarmId: string) => {
+    if (!canAcknowledge()) return;
     setSelectedAlarmId(alarmId);
     setAcknowledgeDialogOpen(true);
   };
 
-  const handleConfirm = (confirmer: string) => {
-    if (selectedAlarmId) {
-      onAcknowledge(selectedAlarmId, confirmer);
+  const handleConfirm = () => {
+    if (selectedAlarmId && profile) {
+      onAcknowledge(selectedAlarmId, profile.name);
       setAcknowledgeDialogOpen(false);
       setSelectedAlarmId(null);
     }
@@ -49,20 +50,7 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
 
   return (
     <>
-      <div className="dcs-panel h-full flex flex-col">
-        {/* Header */}
-        <div className="dcs-header flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-primary" />
-            <span className="font-medium">报警列表</span>
-          </div>
-          {activeAlarms.length > 0 && (
-            <span className="px-2 py-0.5 text-xs font-medium bg-status-alarm/20 text-status-alarm rounded">
-              {activeAlarms.length} 活跃
-            </span>
-          )}
-        </div>
-
+      <div className="h-full flex flex-col">
         {/* Alarm List */}
         <ScrollArea className="flex-1 dcs-scrollbar">
           <div className="p-2 space-y-2">
@@ -104,15 +92,17 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
                           </div>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="shrink-0 h-7 px-2 text-xs"
-                        onClick={() => handleAcknowledgeClick(alarm.id)}
-                      >
-                        <Check className="w-3 h-3 mr-1" />
-                        确认
-                      </Button>
+                      {canAcknowledge() && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="shrink-0 h-7 px-2 text-xs"
+                          onClick={() => handleAcknowledgeClick(alarm.id)}
+                        >
+                          <Check className="w-3 h-3 mr-1" />
+                          确认
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -162,24 +152,28 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
             <DialogTitle>确认报警</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-muted-foreground mb-4">请选择确认人：</p>
-            <div className="grid grid-cols-2 gap-2">
-              {PRESET_CONFIRMERS.map((name) => (
-                <Button
-                  key={name}
-                  variant="outline"
-                  className="h-12 text-base"
-                  onClick={() => handleConfirm(name)}
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  {name}
-                </Button>
-              ))}
+            <p className="text-sm text-muted-foreground mb-4">
+              您将以 <span className="font-medium text-foreground">{profile?.name}</span> 的身份确认此报警
+            </p>
+            <div className="bg-muted/50 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-primary" />
+                <div>
+                  <div className="font-medium">{profile?.name}</div>
+                  {profile?.employee_id && (
+                    <div className="text-xs text-muted-foreground">工号: {profile.employee_id}</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAcknowledgeDialogOpen(false)}>
               取消
+            </Button>
+            <Button onClick={handleConfirm}>
+              <Check className="w-4 h-4 mr-2" />
+              确认报警
             </Button>
           </DialogFooter>
         </DialogContent>
