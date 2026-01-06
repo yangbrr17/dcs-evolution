@@ -1,4 +1,4 @@
-import { TagData, DataPoint, TagStatus, Alarm } from '@/types/dcs';
+import { TagData, DataPoint, TagStatus, Alarm, ProcessArea } from '@/types/dcs';
 
 // Generate random value within range
 const randomInRange = (min: number, max: number): number => {
@@ -31,8 +31,9 @@ const generateHistory = (baseValue: number, points: number = 30): DataPoint[] =>
   return history;
 };
 
-// Initial mock tags for FCC unit
+// Initial mock tags for FCC unit - all tags across all areas
 export const createInitialTags = (): TagData[] => [
+  // 反应器区域
   {
     id: 'TI-101',
     name: 'TI-101',
@@ -43,21 +44,8 @@ export const createInitialTags = (): TagData[] => [
     predictedValue: 522,
     limits: { highAlarm: 550, highWarning: 540, lowWarning: 500, lowAlarm: 490 },
     status: 'normal',
-    position: { x: 25, y: 30 },
+    position: { x: 35, y: 30 },
     history: generateHistory(520),
-  },
-  {
-    id: 'TI-102',
-    name: 'TI-102',
-    description: '再生器温度',
-    unit: '°C',
-    currentValue: 680,
-    setpoint: 670,
-    predictedValue: 685,
-    limits: { highAlarm: 720, highWarning: 700, lowWarning: 650, lowAlarm: 630 },
-    status: 'normal',
-    position: { x: 60, y: 25 },
-    history: generateHistory(680),
   },
   {
     id: 'PI-201',
@@ -69,8 +57,21 @@ export const createInitialTags = (): TagData[] => [
     predictedValue: 182,
     limits: { highAlarm: 220, highWarning: 200, lowWarning: 150, lowAlarm: 130 },
     status: 'normal',
-    position: { x: 30, y: 50 },
+    position: { x: 35, y: 50 },
     history: generateHistory(180),
+  },
+  {
+    id: 'TI-103',
+    name: 'TI-103',
+    description: '提升管出口温度',
+    unit: '°C',
+    currentValue: 505,
+    setpoint: 510,
+    predictedValue: 508,
+    limits: { highAlarm: 540, highWarning: 530, lowWarning: 480, lowAlarm: 470 },
+    status: 'normal',
+    position: { x: 55, y: 40 },
+    history: generateHistory(505),
   },
   {
     id: 'FI-301',
@@ -85,6 +86,47 @@ export const createInitialTags = (): TagData[] => [
     position: { x: 15, y: 65 },
     history: generateHistory(85),
   },
+  // 再生器区域
+  {
+    id: 'TI-102',
+    name: 'TI-102',
+    description: '再生器温度',
+    unit: '°C',
+    currentValue: 680,
+    setpoint: 670,
+    predictedValue: 685,
+    limits: { highAlarm: 720, highWarning: 700, lowWarning: 650, lowAlarm: 630 },
+    status: 'normal',
+    position: { x: 40, y: 25 },
+    history: generateHistory(680),
+  },
+  {
+    id: 'PI-202',
+    name: 'PI-202',
+    description: '再生器压力',
+    unit: 'kPa',
+    currentValue: 165,
+    setpoint: 160,
+    predictedValue: 168,
+    limits: { highAlarm: 200, highWarning: 185, lowWarning: 140, lowAlarm: 120 },
+    status: 'normal',
+    position: { x: 40, y: 50 },
+    history: generateHistory(165),
+  },
+  {
+    id: 'AI-501',
+    name: 'AI-501',
+    description: '烟气CO含量',
+    unit: 'ppm',
+    currentValue: 120,
+    setpoint: 100,
+    predictedValue: 125,
+    limits: { highAlarm: 200, highWarning: 150, lowWarning: 20, lowAlarm: 10 },
+    status: 'normal',
+    position: { x: 65, y: 35 },
+    history: generateHistory(120),
+  },
+  // 分馏塔区域
   {
     id: 'LI-401',
     name: 'LI-401',
@@ -95,21 +137,79 @@ export const createInitialTags = (): TagData[] => [
     predictedValue: 53,
     limits: { highAlarm: 80, highWarning: 70, lowWarning: 30, lowAlarm: 20 },
     status: 'normal',
-    position: { x: 75, y: 55 },
+    position: { x: 30, y: 40 },
     history: generateHistory(52),
   },
   {
-    id: 'TI-103',
-    name: 'TI-103',
-    description: '提升管出口温度',
+    id: 'TI-104',
+    name: 'TI-104',
+    description: '塔顶温度',
     unit: '°C',
-    currentValue: 505,
-    setpoint: 510,
-    predictedValue: 508,
-    limits: { highAlarm: 540, highWarning: 530, lowWarning: 480, lowAlarm: 470 },
+    currentValue: 115,
+    setpoint: 120,
+    predictedValue: 117,
+    limits: { highAlarm: 150, highWarning: 140, lowWarning: 100, lowAlarm: 90 },
     status: 'normal',
-    position: { x: 45, y: 40 },
-    history: generateHistory(505),
+    position: { x: 30, y: 20 },
+    history: generateHistory(115),
+  },
+  {
+    id: 'TI-105',
+    name: 'TI-105',
+    description: '塔底温度',
+    unit: '°C',
+    currentValue: 345,
+    setpoint: 350,
+    predictedValue: 348,
+    limits: { highAlarm: 380, highWarning: 370, lowWarning: 320, lowAlarm: 300 },
+    status: 'normal',
+    position: { x: 30, y: 70 },
+    history: generateHistory(345),
+  },
+  {
+    id: 'FI-302',
+    name: 'FI-302',
+    description: '回流流量',
+    unit: 't/h',
+    currentValue: 42,
+    setpoint: 45,
+    predictedValue: 43,
+    limits: { highAlarm: 60, highWarning: 55, lowWarning: 35, lowAlarm: 30 },
+    status: 'normal',
+    position: { x: 55, y: 30 },
+    history: generateHistory(42),
+  },
+];
+
+// Process areas configuration
+export const createProcessAreas = (): ProcessArea[] => [
+  {
+    id: 'overview',
+    name: '系统总览',
+    description: 'FCC装置全流程监控',
+    imageUrl: null,
+    tagIds: ['TI-101', 'TI-102', 'PI-201', 'FI-301', 'LI-401', 'TI-103'], // Key tags from all areas
+  },
+  {
+    id: 'reactor',
+    name: '反应器',
+    description: '催化裂化反应区',
+    imageUrl: null,
+    tagIds: ['TI-101', 'PI-201', 'TI-103', 'FI-301'],
+  },
+  {
+    id: 'regenerator',
+    name: '再生器',
+    description: '催化剂再生区',
+    imageUrl: null,
+    tagIds: ['TI-102', 'PI-202', 'AI-501'],
+  },
+  {
+    id: 'fractionator',
+    name: '分馏塔',
+    description: '产品分馏系统',
+    imageUrl: null,
+    tagIds: ['LI-401', 'TI-104', 'TI-105', 'FI-302'],
   },
 ];
 

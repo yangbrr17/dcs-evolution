@@ -1,29 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { TagData, Alarm } from '@/types/dcs';
-import { createInitialTags, updateTagData, generateAlarm } from '@/services/mockDataService';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { TagData, Alarm, ProcessArea } from '@/types/dcs';
+import { createInitialTags, updateTagData, generateAlarm, createProcessAreas } from '@/services/mockDataService';
 import ProcessImageBackground from './ProcessImageBackground';
 import DraggableTag from './DraggableTag';
 import TagDetailModal from './TagDetailModal';
 import AlarmPanel from './AlarmPanel';
 import MonitoringPanel from './MonitoringPanel';
+import AreaNavigation from './AreaNavigation';
 import { Button } from '@/components/ui/button';
-import { Settings, Play, Pause, Plus } from 'lucide-react';
+import { Settings, Play, Pause } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const DCSInterface: React.FC = () => {
-  const [tags, setTags] = useState<TagData[]>(createInitialTags);
+  const [allTags, setAllTags] = useState<TagData[]>(createInitialTags);
+  const [areas, setAreas] = useState<ProcessArea[]>(createProcessAreas);
+  const [currentAreaId, setCurrentAreaId] = useState<string>('overview');
   const [alarms, setAlarms] = useState<Alarm[]>([]);
-  const [processImage, setProcessImage] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isRunning, setIsRunning] = useState(true);
   const [selectedTag, setSelectedTag] = useState<TagData | null>(null);
+
+  // Get current area
+  const currentArea = useMemo(() => 
+    areas.find((a) => a.id === currentAreaId) || areas[0],
+    [areas, currentAreaId]
+  );
+
+  // Filter tags for current area
+  const currentTags = useMemo(() => 
+    allTags.filter((tag) => currentArea.tagIds.includes(tag.id)),
+    [allTags, currentArea]
+  );
 
   // Real-time data update
   useEffect(() => {
     if (!isRunning) return;
 
     const interval = setInterval(() => {
-      setTags((prevTags) => {
+      setAllTags((prevTags) => {
         const newTags = prevTags.map((tag) => {
           const previousStatus = tag.status;
           const updatedTag = updateTagData(tag);
@@ -49,7 +63,7 @@ const DCSInterface: React.FC = () => {
   }, [isRunning]);
 
   const handlePositionChange = useCallback((id: string, position: { x: number; y: number }) => {
-    setTags((prev) =>
+    setAllTags((prev) =>
       prev.map((tag) => (tag.id === id ? { ...tag, position } : tag))
     );
   }, []);
@@ -65,8 +79,20 @@ const DCSInterface: React.FC = () => {
   }, []);
 
   const handleImageUpload = (url: string) => {
-    setProcessImage(url);
-    toast({ title: '图片已上传', description: '您可以开始在图片上放置监测标签' });
+    setAreas((prev) =>
+      prev.map((area) =>
+        area.id === currentAreaId ? { ...area, imageUrl: url } : area
+      )
+    );
+    toast({ title: '图片已上传', description: `已为"${currentArea.name}"设置流程图` });
+  };
+
+  const handleImageRemove = () => {
+    setAreas((prev) =>
+      prev.map((area) =>
+        area.id === currentAreaId ? { ...area, imageUrl: null } : area
+      )
+    );
   };
 
   return (
@@ -75,7 +101,6 @@ const DCSInterface: React.FC = () => {
       <header className="dcs-header flex items-center justify-between px-4 py-2 border-b border-border">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-foreground">DCS 监控系统</h1>
-          <span className="text-xs text-muted-foreground">FCC 装置</span>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -99,17 +124,26 @@ const DCSInterface: React.FC = () => {
         </div>
       </header>
 
+      {/* Area Navigation */}
+      <div className="px-4 py-2 border-b border-border bg-muted/30">
+        <AreaNavigation
+          areas={areas}
+          currentAreaId={currentAreaId}
+          onAreaChange={setCurrentAreaId}
+        />
+      </div>
+
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Process Diagram Area */}
         <div className="flex-1 relative">
           <ProcessImageBackground
-            imageUrl={processImage}
+            imageUrl={currentArea.imageUrl}
             onImageUpload={handleImageUpload}
-            onImageRemove={() => setProcessImage(null)}
+            onImageRemove={handleImageRemove}
             isEditMode={isEditMode}
           >
-            {tags.map((tag) => (
+            {currentTags.map((tag) => (
               <DraggableTag
                 key={tag.id}
                 tag={tag}
@@ -122,7 +156,7 @@ const DCSInterface: React.FC = () => {
 
           {isEditMode && (
             <div className="absolute bottom-4 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border">
-              拖拽标签可调整位置 | 点击"更换图片"上传真实流程图
+              拖拽标签可调整位置 | 点击"更换图片"上传"{currentArea.name}"的流程图
             </div>
           )}
         </div>
@@ -130,7 +164,7 @@ const DCSInterface: React.FC = () => {
         {/* Right Sidebar */}
         <div className="w-72 border-l border-border flex flex-col">
           <div className="flex-1 overflow-hidden">
-            <MonitoringPanel tags={tags} onTagClick={setSelectedTag} />
+            <MonitoringPanel tags={currentTags} onTagClick={setSelectedTag} />
           </div>
           <div className="h-64 border-t border-border">
             <AlarmPanel alarms={alarms} onAcknowledge={handleAcknowledgeAlarm} />

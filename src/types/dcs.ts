@@ -62,6 +62,19 @@ export interface ProcessImage {
   uploadedAt: Date;
 }
 
+export interface ProcessArea {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  tagIds: string[]; // Tags that belong to this area
+}
+
+export interface DCSConfig {
+  areas: ProcessArea[];
+  currentAreaId: string;
+}
+
 export interface User {
   id: string;
   email: string;
