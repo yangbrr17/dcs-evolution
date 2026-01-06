@@ -68,11 +68,11 @@ const DCSInterface: React.FC = () => {
     );
   }, []);
 
-  const handleAcknowledgeAlarm = useCallback((alarmId: string) => {
+  const handleAcknowledgeAlarm = useCallback((alarmId: string, acknowledgedBy: string) => {
     setAlarms((prev) =>
       prev.map((alarm) =>
         alarm.id === alarmId
-          ? { ...alarm, acknowledged: true, acknowledgedAt: new Date() }
+          ? { ...alarm, acknowledged: true, acknowledgedAt: new Date(), acknowledgedBy }
           : alarm
       )
     );
