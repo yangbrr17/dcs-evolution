@@ -20,7 +20,7 @@ import { Settings, Play, Pause, Bell, Clock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const DCSInterface: React.FC = () => {
-  const { user, profile, canEdit } = useAuth();
+  const { user, profile, role, canEdit } = useAuth();
   const [allTags, setAllTags] = useState<TagData[]>(createInitialTags);
   const [areas, setAreas] = useState<ProcessArea[]>(createProcessAreas);
   const [currentAreaId, setCurrentAreaId] = useState<string>('overview');
@@ -150,8 +150,8 @@ const DCSInterface: React.FC = () => {
   }, [user, profile, allTags, currentAreaId]);
 
   const handleAcknowledgeAlarm = useCallback(async (alarmId: string, acknowledgedBy: string) => {
-    // Update in database
-    await acknowledgeAlarm(alarmId, acknowledgedBy);
+    // Update in database (pass role for defense-in-depth validation)
+    await acknowledgeAlarm(alarmId, acknowledgedBy, role ?? undefined);
     
     // Optimistic UI update
     setAlarms((prev) =>
@@ -172,7 +172,7 @@ const DCSInterface: React.FC = () => {
         acknowledgedBy,
       }, currentAreaId);
     }
-  }, [user, profile, alarms, currentAreaId]);
+  }, [user, profile, role, alarms, currentAreaId]);
 
   const handleImageUpload = (url: string) => {
     setAreas((prev) =>
