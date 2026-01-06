@@ -1,10 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Alarm } from '@/types/dcs';
 
-// Save alarm to database
-export const saveAlarm = async (alarm: Alarm): Promise<void> => {
-  const { error } = await supabase.from('alarms').insert({
-    id: alarm.id,
+// Save alarm to database (let DB generate UUID)
+export const saveAlarm = async (alarm: Alarm): Promise<string | null> => {
+  const { data, error } = await supabase.from('alarms').insert({
     tag_id: alarm.tagId,
     tag_name: alarm.tagName,
     message: alarm.message,
@@ -13,11 +12,14 @@ export const saveAlarm = async (alarm: Alarm): Promise<void> => {
     acknowledged: alarm.acknowledged,
     acknowledged_by: alarm.acknowledgedBy || null,
     acknowledged_at: alarm.acknowledgedAt?.toISOString() || null,
-  });
+  }).select('id').single();
 
   if (error) {
     console.error('Failed to save alarm:', error);
+    return null;
   }
+  
+  return data?.id || null;
 };
 
 // Fetch alarms from database
