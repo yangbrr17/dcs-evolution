@@ -75,8 +75,17 @@ const DCSInterface: React.FC = () => {
           // Check for new alarms
           const alarm = generateAlarm(updatedTag, previousStatus);
           if (alarm) {
-            // Save to database
-            saveAlarm(alarm);
+            // Save to database and update local state with DB-generated ID
+            saveAlarm(alarm).then((dbId) => {
+              if (dbId) {
+                const dbAlarm = { ...alarm, id: dbId };
+                setAlarms((prev) => {
+                  // Avoid duplicates
+                  if (prev.some((a) => a.id === dbId)) return prev;
+                  return [dbAlarm, ...prev].slice(0, 50);
+                });
+              }
+            });
             toast({
               title: alarm.type === 'alarm' ? '⚠️ 报警' : '⚡ 警告',
               description: alarm.message,
