@@ -2,10 +2,11 @@ import React, { useRef, useState } from 'react';
 import { Upload, Image as ImageIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProcessImageBackgroundProps {
   imageUrl: string | null;
-  onImageUpload: (url: string) => void;
+  onImageUpload: (file: File) => void;
   onImageRemove: () => void;
   children: React.ReactNode;
   isEditMode: boolean;
@@ -18,19 +19,18 @@ const ProcessImageBackground: React.FC<ProcessImageBackgroundProps> = ({
   children,
   isEditMode,
 }) => {
+  const { isAdmin } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFileSelect = (file: File) => {
     if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        onImageUpload(result);
-      };
-      reader.readAsDataURL(file);
+      onImageUpload(file);
     }
   };
+
+  // Check if current user can edit images (admin only)
+  const canEditImage = isAdmin();
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -77,20 +77,26 @@ const ProcessImageBackground: React.FC<ProcessImageBackgroundProps> = ({
         <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground z-20 pointer-events-none">
           <ImageIcon className="w-16 h-16 mb-4 opacity-30" />
           <p className="text-lg mb-2">暂无流程图</p>
-          <p className="text-sm mb-4">上传您的工厂/装置照片作为背景</p>
-          <Button
-            variant="outline"
-            onClick={handleButtonClick}
-            className="gap-2 pointer-events-auto"
-          >
-            <Upload className="w-4 h-4" />
-            上传图片
-          </Button>
+          {canEditImage ? (
+            <>
+              <p className="text-sm mb-4">上传您的工厂/装置照片作为背景</p>
+              <Button
+                variant="outline"
+                onClick={handleButtonClick}
+                className="gap-2 pointer-events-auto"
+              >
+                <Upload className="w-4 h-4" />
+                上传图片
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm">请联系管理员上传流程图</p>
+          )}
         </div>
       )}
 
-      {/* Image controls in edit mode */}
-      {isEditMode && imageUrl && (
+      {/* Image controls - only for admins */}
+      {canEditImage && imageUrl && (
         <div className="absolute top-2 right-2 flex gap-2 z-30">
           <Button
             size="sm"

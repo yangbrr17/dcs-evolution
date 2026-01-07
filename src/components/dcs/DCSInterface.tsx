@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { TagData, Alarm, ProcessArea } from '@/types/dcs';
-import { createInitialTags, updateTagData, generateAlarm, createProcessAreas } from '@/services/mockDataService';
+import { createInitialTags, updateTagData, generateAlarm } from '@/services/mockDataService';
 import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
 import { logOperation } from '@/services/operationLogService';
 import { startShift } from '@/services/shiftService';
+import { fetchProcessAreas, uploadProcessImage, removeProcessImage } from '@/services/processAreaService';
 import { useAuth } from '@/contexts/AuthContext';
 import ProcessImageBackground from './ProcessImageBackground';
 import DraggableTag from './DraggableTag';
@@ -22,8 +23,8 @@ import { toast } from '@/hooks/use-toast';
 const DCSInterface: React.FC = () => {
   const { user, profile, role, canEdit } = useAuth();
   const [allTags, setAllTags] = useState<TagData[]>(createInitialTags);
-  const [areas, setAreas] = useState<ProcessArea[]>(createProcessAreas);
-  const [currentAreaId, setCurrentAreaId] = useState<string>('overview');
+  const [areas, setAreas] = useState<ProcessArea[]>([]);
+  const [currentAreaId, setCurrentAreaId] = useState<string>('reactor');
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isRunning, setIsRunning] = useState(true);
@@ -50,6 +51,18 @@ const DCSInterface: React.FC = () => {
       startShift(user.id, profile.name);
     }
   }, [user, profile]);
+
+  // Load process areas from database on mount
+  useEffect(() => {
+    const loadAreas = async () => {
+      const dbAreas = await fetchProcessAreas();
+      if (dbAreas.length > 0) {
+        setAreas(dbAreas);
+        setCurrentAreaId(dbAreas[0].id);
+      }
+    };
+    loadAreas();
+  }, []);
 
   // Load alarms from database on mount
   useEffect(() => {
@@ -174,38 +187,49 @@ const DCSInterface: React.FC = () => {
     }
   }, [user, profile, role, alarms, currentAreaId]);
 
-  const handleImageUpload = (url: string) => {
-    setAreas((prev) =>
-      prev.map((area) =>
-        area.id === currentAreaId ? { ...area, imageUrl: url } : area
-      )
-    );
-    toast({ title: '图片已上传', description: `已为"${currentArea.name}"设置流程图` });
-    
-    // Log the operation
-    if (user && profile) {
-      logOperation(user.id, profile.name, 'image_upload', {
-        areaId: currentAreaId,
-        areaName: currentArea.name,
-      }, currentAreaId);
+  const handleImageUpload = useCallback(async (file: File) => {
+    const url = await uploadProcessImage(currentAreaId, file);
+    if (url) {
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === currentAreaId ? { ...area, imageUrl: url } : area
+        )
+      );
+      toast({ title: '图片已上传', description: `已为"${currentArea.name}"设置流程图` });
+      
+      // Log the operation
+      if (user && profile) {
+        logOperation(user.id, profile.name, 'image_upload', {
+          areaId: currentAreaId,
+          areaName: currentArea.name,
+        }, currentAreaId);
+      }
+    } else {
+      toast({ title: '上传失败', description: '请检查您是否有管理员权限', variant: 'destructive' });
     }
-  };
+  }, [currentAreaId, currentArea, user, profile]);
 
-  const handleImageRemove = () => {
-    setAreas((prev) =>
-      prev.map((area) =>
-        area.id === currentAreaId ? { ...area, imageUrl: null } : area
-      )
-    );
-    
-    // Log the operation
-    if (user && profile) {
-      logOperation(user.id, profile.name, 'image_remove', {
-        areaId: currentAreaId,
-        areaName: currentArea.name,
-      }, currentAreaId);
+  const handleImageRemove = useCallback(async () => {
+    const success = await removeProcessImage(currentAreaId, currentArea.imageUrl);
+    if (success) {
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === currentAreaId ? { ...area, imageUrl: null } : area
+        )
+      );
+      toast({ title: '图片已移除' });
+      
+      // Log the operation
+      if (user && profile) {
+        logOperation(user.id, profile.name, 'image_remove', {
+          areaId: currentAreaId,
+          areaName: currentArea.name,
+        }, currentAreaId);
+      }
+    } else {
+      toast({ title: '移除失败', description: '请检查您是否有管理员权限', variant: 'destructive' });
     }
-  };
+  }, [currentAreaId, currentArea, user, profile]);
 
   const handleModeChange = (running: boolean) => {
     setIsRunning(running);
