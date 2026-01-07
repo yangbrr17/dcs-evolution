@@ -68,30 +68,30 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
       style={{ zIndex: 50 }}
     >
       <defs>
-        {/* 灰色箭头（普通因果）- 更大更明显 */}
+        {/* 灰色箭头（普通因果）- 细长型 */}
         <marker
           id="arrow-normal"
-          markerWidth="4"
-          markerHeight="4"
-          refX="3.5"
-          refY="2"
+          markerWidth="2.5"
+          markerHeight="1.5"
+          refX="2.2"
+          refY="0.75"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M 0 0 L 4 2 L 0 4 L 1 2 Z" fill="#9ca3af" />
+          <path d="M 0 0.15 L 2.5 0.75 L 0 1.35 L 0.4 0.75 Z" fill="#9ca3af" />
         </marker>
         
-        {/* 红色箭头（高贡献因果）- 更大更明显 */}
+        {/* 红色箭头（高贡献因果）- 细长型 */}
         <marker
           id="arrow-critical"
-          markerWidth="5"
-          markerHeight="5"
-          refX="4.5"
-          refY="2.5"
+          markerWidth="3"
+          markerHeight="1.8"
+          refX="2.7"
+          refY="0.9"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M 0 0 L 5 2.5 L 0 5 L 1.2 2.5 Z" fill="#ef4444" />
+          <path d="M 0 0.15 L 3 0.9 L 0 1.65 L 0.5 0.9 Z" fill="#ef4444" />
         </marker>
       </defs>
       
@@ -101,9 +101,13 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         
         if (!fromTag || !toTag) return null;
         
-        const x1 = fromTag.position.x;
+        // 状态点在tag左侧，偏移约2.5%（基于tag宽度约5%估算）
+        // 箭头从源tag的状态点出发，指向目标tag的状态点
+        const statusDotOffset = 2.5;
+        
+        const x1 = fromTag.position.x - statusDotOffset;
         const y1 = fromTag.position.y;
-        const x2 = toTag.position.x;
+        const x2 = toTag.position.x - statusDotOffset;
         const y2 = toTag.position.y;
         
         const pathD = getCurvedPath(x1, y1, x2, y2);
