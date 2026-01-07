@@ -20,7 +20,7 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
     return null;
   }
 
-  // Calculate curved path between two points
+  // Calculate curved path between two points with offset for arrow
   const getCurvedPath = (x1: number, y1: number, x2: number, y2: number) => {
     // Calculate control point for quadratic bezier curve
     const midX = (x1 + x2) / 2;
@@ -31,8 +31,11 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
     const dy = y2 - y1;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
+    // Avoid division by zero
+    if (distance === 0) return `M ${x1}% ${y1}% L ${x2}% ${y2}%`;
+    
     // Curve intensity based on distance (more curve for longer lines)
-    const curveOffset = Math.min(distance * 0.2, 8);
+    const curveOffset = Math.min(distance * 0.15, 6);
     
     // Perpendicular direction (rotate 90 degrees)
     const perpX = -dy / distance;
@@ -51,35 +54,35 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
       style={{ overflow: 'visible' }}
     >
       <defs>
-        {/* Normal arrow marker - gray */}
+        {/* Normal arrow marker - gray, small triangle */}
         <marker
           id="arrow-normal"
-          markerWidth="6"
-          markerHeight="6"
-          refX="5"
-          refY="3"
+          markerWidth="4"
+          markerHeight="4"
+          refX="3"
+          refY="2"
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <polygon 
-            points="0 0, 6 3, 0 6" 
-            fill="rgba(156, 163, 175, 0.8)" 
+          <path 
+            d="M 0 0 L 4 2 L 0 4 L 1 2 Z" 
+            fill="#9ca3af"
           />
         </marker>
         
-        {/* Critical arrow marker - red highlighted */}
+        {/* Critical arrow marker - red, small triangle */}
         <marker
           id="arrow-critical"
-          markerWidth="6"
-          markerHeight="6"
-          refX="5"
-          refY="3"
+          markerWidth="4"
+          markerHeight="4"
+          refX="3"
+          refY="2"
           orient="auto"
           markerUnits="strokeWidth"
         >
-          <polygon 
-            points="0 0, 6 3, 0 6" 
-            fill="rgba(239, 68, 68, 0.9)" 
+          <path 
+            d="M 0 0 L 4 2 L 0 4 L 1 2 Z" 
+            fill="#ef4444"
           />
         </marker>
       </defs>
@@ -105,8 +108,10 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
             key={`${link.from}-${link.to}`}
             d={pathD}
             fill="none"
-            stroke={isCritical ? 'rgba(239, 68, 68, 0.85)' : 'rgba(156, 163, 175, 0.7)'}
-            strokeWidth={isCritical ? 3 : 2}
+            stroke={isCritical ? '#ef4444' : '#9ca3af'}
+            strokeWidth={isCritical ? 2.5 : 1.8}
+            strokeOpacity={isCritical ? 0.9 : 0.85}
+            strokeLinecap="round"
             markerEnd={`url(#arrow-${isCritical ? 'critical' : 'normal'})`}
             className={isCritical ? 'animate-pulse' : ''}
           />
