@@ -68,30 +68,30 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
       style={{ zIndex: 50 }}
     >
       <defs>
-        {/* 灰色小箭头（普通因果） */}
+        {/* 灰色箭头（普通因果）- 更大更明显 */}
         <marker
           id="arrow-normal"
-          markerWidth="1.2"
-          markerHeight="1.2"
-          refX="0.9"
-          refY="0.6"
+          markerWidth="4"
+          markerHeight="4"
+          refX="3.5"
+          refY="2"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M 0 0.15 L 1.05 0.6 L 0 1.05 L 0.3 0.6 Z" fill="#9ca3af" />
+          <path d="M 0 0 L 4 2 L 0 4 L 1 2 Z" fill="#9ca3af" />
         </marker>
         
-        {/* 红色小箭头（关键因果） */}
+        {/* 红色箭头（高贡献因果）- 更大更明显 */}
         <marker
           id="arrow-critical"
-          markerWidth="1.5"
-          markerHeight="1.5"
-          refX="1.1"
-          refY="0.75"
+          markerWidth="5"
+          markerHeight="5"
+          refX="4.5"
+          refY="2.5"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path d="M 0 0.15 L 1.35 0.75 L 0 1.35 L 0.375 0.75 Z" fill="#ef4444" />
+          <path d="M 0 0 L 5 2.5 L 0 5 L 1.2 2.5 Z" fill="#ef4444" />
         </marker>
       </defs>
       
