@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { TagData } from '@/types/dcs';
 import { findCausalChain } from '@/services/causalityService';
 
@@ -11,12 +11,40 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
   hoveredAlarmTagId, 
   tags 
 }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const delayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const causalLinks = useMemo(() => {
     if (!hoveredAlarmTagId) return [];
     return findCausalChain(hoveredAlarmTagId);
   }, [hoveredAlarmTagId]);
 
-  if (!hoveredAlarmTagId || causalLinks.length === 0) {
+  // 延迟3秒后显示箭头
+  useEffect(() => {
+    // 清理之前的定时器
+    if (delayTimeoutRef.current) {
+      clearTimeout(delayTimeoutRef.current);
+    }
+    
+    if (hoveredAlarmTagId && causalLinks.length > 0) {
+      // 延迟3秒后显示箭头
+      setIsVisible(false);
+      delayTimeoutRef.current = setTimeout(() => {
+        setIsVisible(true);
+      }, 3000);
+    } else {
+      // 立即隐藏
+      setIsVisible(false);
+    }
+    
+    return () => {
+      if (delayTimeoutRef.current) {
+        clearTimeout(delayTimeoutRef.current);
+      }
+    };
+  }, [hoveredAlarmTagId, causalLinks.length]);
+
+  if (!hoveredAlarmTagId || causalLinks.length === 0 || !isVisible) {
     return null;
   }
 
@@ -62,7 +90,7 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
 
   return (
     <svg 
-      className="absolute inset-0 w-full h-full pointer-events-none"
+      className="absolute inset-0 w-full h-full pointer-events-none animate-fade-in"
       viewBox="0 0 100 100"
       preserveAspectRatio="none"
       style={{ zIndex: 50 }}

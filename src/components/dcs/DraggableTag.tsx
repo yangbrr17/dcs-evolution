@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TagData } from '@/types/dcs';
 import { GripVertical, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,8 +26,19 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
   isHighlighted,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isHoverCardOpen, setIsHoverCardOpen] = useState(false);
   const tagRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!isEditMode || !tagRef.current) return;
@@ -100,12 +111,27 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
     if (tag.status === 'alarm' && onHover) {
       onHover(tag.id);
     }
+    
+    // 打开 HoverCard 并设置 3秒后自动关闭
+    setIsHoverCardOpen(true);
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHoverCardOpen(false);
+    }, 3000);
   };
 
   const handleMouseLeave = () => {
     if (onHover) {
       onHover(null);
     }
+    
+    // 清理定时器并关闭 HoverCard
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    setIsHoverCardOpen(false);
   };
 
   const TagContent = (
@@ -152,7 +178,7 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
   }
 
   return (
-    <HoverCard openDelay={100} closeDelay={50}>
+    <HoverCard open={isHoverCardOpen} onOpenChange={setIsHoverCardOpen}>
       <HoverCardTrigger asChild>
         {TagContent}
       </HoverCardTrigger>
