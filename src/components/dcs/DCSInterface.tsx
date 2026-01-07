@@ -4,11 +4,13 @@ import { createInitialTags, updateTagData, generateAlarm } from '@/services/mock
 import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
 import { logOperation } from '@/services/operationLogService';
 import { saveTagPosition, applyStoredPositions } from '@/services/tagPositionService';
+import { findCausalChain } from '@/services/causalityService';
 import { startShift } from '@/services/shiftService';
 import { fetchProcessAreas, uploadProcessImage, removeProcessImage } from '@/services/processAreaService';
 import { useAuth } from '@/contexts/AuthContext';
 import ProcessImageBackground from './ProcessImageBackground';
 import DraggableTag from './DraggableTag';
+import CausalityArrows from './CausalityArrows';
 import TagDetailModal from './TagDetailModal';
 import AlarmPanel from './AlarmPanel';
 import MonitoringPanel from './MonitoringPanel';
@@ -31,6 +33,19 @@ const DCSInterface: React.FC = () => {
   const [isRunning, setIsRunning] = useState(true);
   const [selectedTag, setSelectedTag] = useState<TagData | null>(null);
   const [showShiftHandover, setShowShiftHandover] = useState(false);
+  const [hoveredAlarmTagId, setHoveredAlarmTagId] = useState<string | null>(null);
+
+  // Get highlighted tag IDs for causal chain visualization
+  const highlightedTagIds = useMemo(() => {
+    if (!hoveredAlarmTagId) return new Set<string>();
+    const links = findCausalChain(hoveredAlarmTagId);
+    const ids = new Set<string>();
+    links.forEach(link => {
+      ids.add(link.from);
+      ids.add(link.to);
+    });
+    return ids;
+  }, [hoveredAlarmTagId]);
 
   // Get current area
   const currentArea = useMemo(() => 
@@ -313,6 +328,13 @@ const DCSInterface: React.FC = () => {
             onImageRemove={handleImageRemove}
             isEditMode={isEditMode}
           >
+            {/* Causality arrows layer */}
+            <CausalityArrows
+              hoveredAlarmTagId={hoveredAlarmTagId}
+              tags={currentTags}
+            />
+            
+            {/* Tags layer */}
             {currentTags.map((tag) => (
               <DraggableTag
                 key={tag.id}
@@ -320,6 +342,8 @@ const DCSInterface: React.FC = () => {
                 isEditMode={isEditMode}
                 onPositionChange={handlePositionChange}
                 onClick={setSelectedTag}
+                onHover={setHoveredAlarmTagId}
+                isHighlighted={highlightedTagIds.has(tag.id)}
               />
             ))}
           </ProcessImageBackground>

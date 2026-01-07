@@ -13,6 +13,8 @@ interface DraggableTagProps {
   isEditMode: boolean;
   onPositionChange: (id: string, position: { x: number; y: number }) => void;
   onClick: (tag: TagData) => void;
+  onHover?: (tagId: string | null) => void;
+  isHighlighted?: boolean;
 }
 
 const DraggableTag: React.FC<DraggableTagProps> = ({
@@ -20,6 +22,8 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
   isEditMode,
   onPositionChange,
   onClick,
+  onHover,
+  isHighlighted,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const tagRef = useRef<HTMLDivElement>(null);
@@ -92,6 +96,18 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
     }
   };
 
+  const handleMouseEnter = () => {
+    if (tag.status === 'alarm' && onHover) {
+      onHover(tag.id);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (onHover) {
+      onHover(null);
+    }
+  };
+
   const TagContent = (
     <div
       ref={tagRef}
@@ -102,7 +118,8 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
         getStatusBorderClass(),
         isDragging && 'shadow-xl z-50 cursor-grabbing scale-110',
         isEditMode && !isDragging && 'cursor-grab hover:shadow-lg hover:scale-105',
-        !isEditMode && 'cursor-pointer hover:shadow-md hover:bg-card'
+        !isEditMode && 'cursor-pointer hover:shadow-md hover:bg-card',
+        isHighlighted && 'ring-2 ring-red-500/60 shadow-lg'
       )}
       style={{
         left: `${tag.position.x}%`,
@@ -111,6 +128,8 @@ const DraggableTag: React.FC<DraggableTagProps> = ({
       }}
       onClick={() => !isEditMode && !isDragging && onClick(tag)}
       onMouseDown={isEditMode ? handleMouseDown : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Status Dot */}
       <div className={cn('status-dot', getStatusDotClass())} />

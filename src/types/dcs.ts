@@ -81,3 +81,15 @@ export interface User {
   name: string;
   role: 'admin' | 'operator' | 'viewer';
 }
+
+// Causality types for Root Cause Analysis
+export interface CausalLink {
+  from: string;      // Cause variable ID
+  to: string;        // Effect variable ID
+  weight?: number;   // Optional influence weight
+}
+
+export interface CausalityGraph {
+  version: string;
+  links: CausalLink[];
+}
