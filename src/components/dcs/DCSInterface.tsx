@@ -38,10 +38,10 @@ const DCSInterface: React.FC = () => {
   );
 
   // Filter tags for current area
-  const currentTags = useMemo(() => 
-    allTags.filter((tag) => currentArea.tagIds.includes(tag.id)),
-    [allTags, currentArea]
-  );
+  const currentTags = useMemo(() => {
+    if (!currentArea) return [];
+    return allTags.filter((tag) => currentArea.tagIds.includes(tag.id));
+  }, [allTags, currentArea]);
 
   // Start shift on login
   useEffect(() => {
@@ -243,6 +243,15 @@ const DCSInterface: React.FC = () => {
   };
 
   const activeAlarms = alarms.filter(a => !a.acknowledged);
+
+  // Show loading state if areas not yet loaded
+  if (!currentArea) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">加载中...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-background">
