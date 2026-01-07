@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { TagData } from '@/types/dcs';
-import { findCausalChain, isCriticalLink } from '@/services/causalityService';
+import { findCausalChain } from '@/services/causalityService';
 
 interface CausalityArrowsProps {
   hoveredAlarmTagId: string | null;
@@ -101,8 +101,6 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         
         if (!fromTag || !toTag) return null;
         
-        const isCritical = isCriticalLink(link, tags);
-        
         const x1 = fromTag.position.x;
         const y1 = fromTag.position.y;
         const x2 = toTag.position.x;
@@ -112,18 +110,22 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         const labelPos = getCurvePointAt(x1, y1, x2, y2, 0.5);
         const contribution = link.contribution ?? 50;
         
+        // 贡献度大于40%的标记为高贡献（红色）
+        const isHighContribution = contribution >= 40;
+        
         return (
           <g key={`${link.from}-${link.to}`}>
-            {/* 箭头曲线 */}
+            {/* 箭头曲线 - 使用虚线 */}
             <path
               d={pathD}
               fill="none"
-              stroke={isCritical ? '#ef4444' : '#9ca3af'}
-              strokeWidth={isCritical ? 0.5 : 0.35}
+              stroke={isHighContribution ? '#ef4444' : '#9ca3af'}
+              strokeWidth={isHighContribution ? 0.5 : 0.35}
               strokeOpacity={1}
               strokeLinecap="round"
-              markerEnd={`url(#arrow-${isCritical ? 'critical' : 'normal'})`}
-              className={isCritical ? 'animate-pulse' : ''}
+              strokeDasharray="1 0.5"
+              markerEnd={`url(#arrow-${isHighContribution ? 'critical' : 'normal'})`}
+              className={isHighContribution ? 'animate-pulse' : ''}
             />
             
             {/* 贡献度标签 */}
@@ -134,8 +136,8 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
                 width="7"
                 height="2.5"
                 rx="0.5"
-                fill={isCritical ? '#fef2f2' : '#f9fafb'}
-                stroke={isCritical ? '#ef4444' : '#d1d5db'}
+                fill={isHighContribution ? '#fef2f2' : '#f9fafb'}
+                stroke={isHighContribution ? '#ef4444' : '#d1d5db'}
                 strokeWidth="0.15"
               />
               <text
@@ -144,7 +146,7 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
                 textAnchor="middle"
                 fontSize="1.4"
                 fontWeight="500"
-                fill={isCritical ? '#dc2626' : '#6b7280'}
+                fill={isHighContribution ? '#dc2626' : '#6b7280'}
               >
                 Contr: {contribution}%
               </text>
