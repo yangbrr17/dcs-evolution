@@ -107,6 +107,14 @@ const UserMenu: React.FC<UserMenuProps> = ({ onShiftHandover }) => {
         
         <DropdownMenuSeparator />
         
+        {/* User Management - Only for admins */}
+        {role === 'admin' && (
+          <DropdownMenuItem onClick={() => navigate('/user-management')}>
+            <Shield className="w-4 h-4 mr-2" />
+            用户管理
+          </DropdownMenuItem>
+        )}
+        
         {/* Shift Handover - Only for operators and admins */}
         {canEdit() && (
           <DropdownMenuItem onClick={onShiftHandover}>
