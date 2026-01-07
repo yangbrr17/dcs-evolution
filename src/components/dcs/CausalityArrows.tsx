@@ -73,8 +73,8 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
 
   return (
     <svg 
-      className="absolute inset-0 w-full h-full pointer-events-none z-10"
-      style={{ overflow: 'visible' }}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ overflow: 'visible', zIndex: 50 }}
     >
       <defs>
         {/* Normal arrow marker - gray, small triangle */}
