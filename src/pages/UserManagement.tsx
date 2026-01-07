@@ -41,12 +41,14 @@ const roleColors: Record<AppRole, string> = {
 };
 
 const UserManagement: React.FC = () => {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { user: currentUser, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingChanges, setPendingChanges] = useState<Record<string, AppRole>>({});
   const [saving, setSaving] = useState(false);
+
+  const isCurrentUser = (userId: string) => currentUser?.id === userId;
 
   useEffect(() => {
     if (!authLoading && !isAdmin()) {
@@ -181,24 +183,28 @@ const UserManagement: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={currentRole}
-                          onValueChange={(value) => handleRoleChange(user.id, value as AppRole)}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {roleOptions.map(option => (
-                              <SelectItem key={option.value} value={option.value}>
-                                <div className="flex items-center gap-2">
-                                  {roleIcons[option.value]}
-                                  {option.label}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {isCurrentUser(user.id) ? (
+                          <span className="text-xs text-muted-foreground">当前用户</span>
+                        ) : (
+                          <Select
+                            value={currentRole}
+                            onValueChange={(value) => handleRoleChange(user.id, value as AppRole)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {roleOptions.map(option => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <div className="flex items-center gap-2">
+                                    {roleIcons[option.value]}
+                                    {option.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
