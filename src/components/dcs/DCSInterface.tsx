@@ -3,6 +3,7 @@ import { TagData, Alarm, ProcessArea } from '@/types/dcs';
 import { createInitialTags, updateTagData, generateAlarm } from '@/services/mockDataService';
 import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
 import { logOperation } from '@/services/operationLogService';
+import { saveTagPosition, applyStoredPositions } from '@/services/tagPositionService';
 import { startShift } from '@/services/shiftService';
 import { fetchProcessAreas, uploadProcessImage, removeProcessImage } from '@/services/processAreaService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,10 +38,11 @@ const DCSInterface: React.FC = () => {
     [areas, currentAreaId]
   );
 
-  // Filter tags for current area
+  // Filter tags for current area and apply stored positions
   const currentTags = useMemo(() => {
     if (!currentArea) return [];
-    return allTags.filter((tag) => currentArea.tagIds.includes(tag.id));
+    const areaTags = allTags.filter((tag) => currentArea.tagIds.includes(tag.id));
+    return applyStoredPositions(areaTags, currentArea.id);
   }, [allTags, currentArea]);
 
   // Start shift on login
@@ -150,6 +152,9 @@ const DCSInterface: React.FC = () => {
     setAllTags((prev) =>
       prev.map((tag) => (tag.id === id ? { ...tag, position } : tag))
     );
+    
+    // Persist position to localStorage
+    saveTagPosition(id, currentAreaId, position);
     
     // Log the operation
     if (user && profile) {
