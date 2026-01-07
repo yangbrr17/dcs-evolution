@@ -24,7 +24,7 @@ const DCSInterface: React.FC = () => {
   const { user, profile, role, canEdit } = useAuth();
   const [allTags, setAllTags] = useState<TagData[]>(createInitialTags);
   const [areas, setAreas] = useState<ProcessArea[]>([]);
-  const [currentAreaId, setCurrentAreaId] = useState<string>('reactor');
+  const [currentAreaId, setCurrentAreaId] = useState<string>('overview');
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isRunning, setIsRunning] = useState(true);
