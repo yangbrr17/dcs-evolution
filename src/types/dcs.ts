@@ -84,9 +84,10 @@ export interface User {
 
 // Causality types for Root Cause Analysis
 export interface CausalLink {
-  from: string;      // Cause variable ID
-  to: string;        // Effect variable ID
-  weight?: number;   // Optional influence weight
+  from: string;         // Cause variable ID
+  to: string;           // Effect variable ID
+  weight?: number;      // Optional influence weight
+  contribution?: number; // Contribution percentage (0-100)
 }
 
 export interface CausalityGraph {
