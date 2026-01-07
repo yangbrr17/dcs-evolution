@@ -48,6 +48,29 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
     return `M ${x1}% ${y1}% Q ${ctrlX}% ${ctrlY}% ${x2}% ${y2}%`;
   };
 
+  // Calculate the position along the curve for the label
+  const getCurvePointAt = (x1: number, y1: number, x2: number, y2: number, t: number = 0.5) => {
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance === 0) return { x: x1, y: y1 };
+    
+    const curveOffset = Math.min(distance * 0.15, 6);
+    const perpX = -dy / distance;
+    const perpY = dx / distance;
+    const ctrlX = midX + perpX * curveOffset;
+    const ctrlY = midY + perpY * curveOffset;
+    
+    // Quadratic bezier at t
+    const px = (1-t)*(1-t)*x1 + 2*(1-t)*t*ctrlX + t*t*x2;
+    const py = (1-t)*(1-t)*y1 + 2*(1-t)*t*ctrlY + t*t*y2;
+    
+    return { x: px, y: py };
+  };
+
   return (
     <svg 
       className="absolute inset-0 w-full h-full pointer-events-none z-10"
@@ -57,15 +80,15 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         {/* Normal arrow marker - gray, small triangle */}
         <marker
           id="arrow-normal"
-          markerWidth="4"
-          markerHeight="4"
-          refX="3"
-          refY="2"
+          markerWidth="8"
+          markerHeight="8"
+          refX="6"
+          refY="4"
           orient="auto"
-          markerUnits="strokeWidth"
+          markerUnits="userSpaceOnUse"
         >
           <path 
-            d="M 0 0 L 4 2 L 0 4 L 1 2 Z" 
+            d="M 0 1 L 7 4 L 0 7 L 2 4 Z" 
             fill="#9ca3af"
           />
         </marker>
@@ -73,15 +96,15 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         {/* Critical arrow marker - red, small triangle */}
         <marker
           id="arrow-critical"
-          markerWidth="4"
-          markerHeight="4"
-          refX="3"
-          refY="2"
+          markerWidth="10"
+          markerHeight="10"
+          refX="7"
+          refY="5"
           orient="auto"
-          markerUnits="strokeWidth"
+          markerUnits="userSpaceOnUse"
         >
           <path 
-            d="M 0 0 L 4 2 L 0 4 L 1 2 Z" 
+            d="M 0 1 L 9 5 L 0 9 L 2.5 5 Z" 
             fill="#ef4444"
           />
         </marker>
@@ -102,19 +125,47 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         const y2 = toTag.position.y;
         
         const pathD = getCurvedPath(x1, y1, x2, y2);
+        const labelPos = getCurvePointAt(x1, y1, x2, y2, 0.5);
+        const contribution = link.contribution ?? 50;
         
         return (
-          <path
-            key={`${link.from}-${link.to}`}
-            d={pathD}
-            fill="none"
-            stroke={isCritical ? '#ef4444' : '#9ca3af'}
-            strokeWidth={isCritical ? 2.5 : 1.8}
-            strokeOpacity={isCritical ? 0.9 : 0.85}
-            strokeLinecap="round"
-            markerEnd={`url(#arrow-${isCritical ? 'critical' : 'normal'})`}
-            className={isCritical ? 'animate-pulse' : ''}
-          />
+          <g key={`${link.from}-${link.to}`}>
+            {/* Arrow line */}
+            <path
+              d={pathD}
+              fill="none"
+              stroke={isCritical ? '#ef4444' : '#9ca3af'}
+              strokeWidth={isCritical ? 3 : 2}
+              strokeOpacity={1}
+              strokeLinecap="round"
+              markerEnd={`url(#arrow-${isCritical ? 'critical' : 'normal'})`}
+              className={isCritical ? 'animate-pulse' : ''}
+            />
+            
+            {/* Contribution label */}
+            <g transform={`translate(${labelPos.x}%, ${labelPos.y}%)`}>
+              <rect
+                x="-22"
+                y="-10"
+                width="44"
+                height="16"
+                rx="3"
+                fill={isCritical ? '#fef2f2' : '#f9fafb'}
+                stroke={isCritical ? '#ef4444' : '#d1d5db'}
+                strokeWidth="1"
+              />
+              <text
+                x="0"
+                y="3"
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="500"
+                fill={isCritical ? '#dc2626' : '#6b7280'}
+              >
+                Contr: {contribution}%
+              </text>
+            </g>
+          </g>
         );
       })}
     </svg>
