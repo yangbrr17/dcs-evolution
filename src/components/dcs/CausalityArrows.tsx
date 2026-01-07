@@ -20,35 +20,25 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
     return null;
   }
 
-  // Calculate curved path between two points with offset for arrow
+  // 使用纯数值坐标计算曲线路径（配合 viewBox 0-100）
   const getCurvedPath = (x1: number, y1: number, x2: number, y2: number) => {
-    // Calculate control point for quadratic bezier curve
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
-    
-    // Calculate perpendicular offset for curve
     const dx = x2 - x1;
     const dy = y2 - y1;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Avoid division by zero
-    if (distance === 0) return `M ${x1}% ${y1}% L ${x2}% ${y2}%`;
+    if (distance === 0) return `M ${x1} ${y1} L ${x2} ${y2}`;
     
-    // Curve intensity based on distance (more curve for longer lines)
-    const curveOffset = Math.min(distance * 0.15, 6);
-    
-    // Perpendicular direction (rotate 90 degrees)
+    const curveOffset = Math.min(distance * 0.2, 8);
     const perpX = -dy / distance;
     const perpY = dx / distance;
-    
-    // Control point
     const ctrlX = midX + perpX * curveOffset;
     const ctrlY = midY + perpY * curveOffset;
     
-    return `M ${x1}% ${y1}% Q ${ctrlX}% ${ctrlY}% ${x2}% ${y2}%`;
+    return `M ${x1} ${y1} Q ${ctrlX} ${ctrlY} ${x2} ${y2}`;
   };
 
-  // Calculate the position along the curve for the label
   const getCurvePointAt = (x1: number, y1: number, x2: number, y2: number, t: number = 0.5) => {
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
@@ -58,13 +48,12 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
     
     if (distance === 0) return { x: x1, y: y1 };
     
-    const curveOffset = Math.min(distance * 0.15, 6);
+    const curveOffset = Math.min(distance * 0.2, 8);
     const perpX = -dy / distance;
     const perpY = dx / distance;
     const ctrlX = midX + perpX * curveOffset;
     const ctrlY = midY + perpY * curveOffset;
     
-    // Quadratic bezier at t
     const px = (1-t)*(1-t)*x1 + 2*(1-t)*t*ctrlX + t*t*x2;
     const py = (1-t)*(1-t)*y1 + 2*(1-t)*t*ctrlY + t*t*y2;
     
@@ -74,39 +63,35 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
   return (
     <svg 
       className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ overflow: 'visible', zIndex: 50 }}
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      style={{ zIndex: 50 }}
     >
       <defs>
-        {/* Normal arrow marker - gray, small triangle */}
+        {/* 灰色小箭头（普通因果） */}
         <marker
           id="arrow-normal"
-          markerWidth="8"
-          markerHeight="8"
-          refX="6"
-          refY="4"
+          markerWidth="1.2"
+          markerHeight="1.2"
+          refX="0.9"
+          refY="0.6"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path 
-            d="M 0 1 L 7 4 L 0 7 L 2 4 Z" 
-            fill="#9ca3af"
-          />
+          <path d="M 0 0.15 L 1.05 0.6 L 0 1.05 L 0.3 0.6 Z" fill="#9ca3af" />
         </marker>
         
-        {/* Critical arrow marker - red, small triangle */}
+        {/* 红色小箭头（关键因果） */}
         <marker
           id="arrow-critical"
-          markerWidth="10"
-          markerHeight="10"
-          refX="7"
-          refY="5"
+          markerWidth="1.5"
+          markerHeight="1.5"
+          refX="1.1"
+          refY="0.75"
           orient="auto"
           markerUnits="userSpaceOnUse"
         >
-          <path 
-            d="M 0 1 L 9 5 L 0 9 L 2.5 5 Z" 
-            fill="#ef4444"
-          />
+          <path d="M 0 0.15 L 1.35 0.75 L 0 1.35 L 0.375 0.75 Z" fill="#ef4444" />
         </marker>
       </defs>
       
@@ -118,7 +103,6 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         
         const isCritical = isCriticalLink(link, tags);
         
-        // Calculate positions (tags use percentage-based positioning)
         const x1 = fromTag.position.x;
         const y1 = fromTag.position.y;
         const x2 = toTag.position.x;
@@ -130,35 +114,35 @@ const CausalityArrows: React.FC<CausalityArrowsProps> = ({
         
         return (
           <g key={`${link.from}-${link.to}`}>
-            {/* Arrow line */}
+            {/* 箭头曲线 */}
             <path
               d={pathD}
               fill="none"
               stroke={isCritical ? '#ef4444' : '#9ca3af'}
-              strokeWidth={isCritical ? 3 : 2}
+              strokeWidth={isCritical ? 0.5 : 0.35}
               strokeOpacity={1}
               strokeLinecap="round"
               markerEnd={`url(#arrow-${isCritical ? 'critical' : 'normal'})`}
               className={isCritical ? 'animate-pulse' : ''}
             />
             
-            {/* Contribution label */}
-            <g transform={`translate(${labelPos.x}%, ${labelPos.y}%)`}>
+            {/* 贡献度标签 */}
+            <g transform={`translate(${labelPos.x}, ${labelPos.y})`}>
               <rect
-                x="-22"
-                y="-10"
-                width="44"
-                height="16"
-                rx="3"
+                x="-3.5"
+                y="-1.5"
+                width="7"
+                height="2.5"
+                rx="0.5"
                 fill={isCritical ? '#fef2f2' : '#f9fafb'}
                 stroke={isCritical ? '#ef4444' : '#d1d5db'}
-                strokeWidth="1"
+                strokeWidth="0.15"
               />
               <text
                 x="0"
-                y="3"
+                y="0.5"
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="1.4"
                 fontWeight="500"
                 fill={isCritical ? '#dc2626' : '#6b7280'}
               >
