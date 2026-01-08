@@ -47,7 +47,7 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
   
   return (
     <div 
-      className={`absolute bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border transition-all duration-300 ${
+      className={`absolute bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border transition-all duration-300 z-20 ${
         isExpanded ? 'h-[40%]' : 'h-10'
       }`}
     >
