@@ -50,6 +50,66 @@ export type Database = {
         }
         Relationships: []
       }
+      bow_ties: {
+        Row: {
+          area_id: string
+          config: Json
+          created_at: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          area_id: string
+          config?: Json
+          created_at?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          area_id?: string
+          config?: Json
+          created_at?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      fault_trees: {
+        Row: {
+          area_id: string
+          created_at: string | null
+          id: string
+          image_url: string | null
+          name: string
+          position: Json | null
+          top_event_tag_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          area_id: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          position?: Json | null
+          top_event_tag_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          area_id?: string
+          created_at?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          position?: Json | null
+          top_event_tag_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       operation_logs: {
         Row: {
           action: string
