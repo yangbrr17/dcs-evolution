@@ -96,6 +96,25 @@ export interface CausalityGraph {
 }
 
 // Fault Tree types
+export type FaultTreeGateType = 'and' | 'or' | 'basic_event' | 'undeveloped';
+
+export interface FaultTreeNode {
+  id: string;
+  type: FaultTreeGateType;
+  label: string;
+  tagId?: string;
+  children?: string[];
+}
+
+export interface FaultTreeStructure {
+  id: string;
+  name: string;
+  areaId: string;
+  topEventId: string;
+  nodes: FaultTreeNode[];
+}
+
+// Legacy config for backwards compatibility
 export interface FaultTreeConfig {
   id: string;
   name: string;

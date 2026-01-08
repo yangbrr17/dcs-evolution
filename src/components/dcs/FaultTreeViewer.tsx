@@ -1,158 +1,244 @@
-import React, { useState, useRef } from 'react';
-import { FaultTreeConfig } from '@/types/dcs';
-import { Button } from '@/components/ui/button';
-import { Upload, ZoomIn, ZoomOut, RotateCcw, Trash2 } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { FaultTreeStructure, FaultTreeNode, TagData } from '@/types/dcs';
 
 interface FaultTreeViewerProps {
-  faultTree: FaultTreeConfig;
-  isEditMode: boolean;
-  onImageUpload: (file: File) => void;
-  onImageRemove: () => void;
-  onPositionChange?: (position: { x: number; y: number }) => void;
+  faultTree: FaultTreeStructure;
+  tags: TagData[];
+  onTagClick?: (tagId: string) => void;
+  onHoveredTagChange?: (tagId: string | null) => void;
 }
 
-const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
+// Calculate node positions based on tree structure
+const calculateNodePositions = (nodes: FaultTreeNode[], topEventId: string) => {
+  const nodeMap = new Map<string, FaultTreeNode>();
+  nodes.forEach(n => nodeMap.set(n.id, n));
+  
+  const positions = new Map<string, { x: number; y: number; level: number }>();
+  const levelWidths = new Map<number, number>();
+  
+  // BFS to assign levels
+  const queue: { id: string; level: number }[] = [{ id: topEventId, level: 0 }];
+  const visited = new Set<string>();
+  
+  while (queue.length > 0) {
+    const { id, level } = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    
+    const node = nodeMap.get(id);
+    if (!node) continue;
+    
+    const currentWidth = levelWidths.get(level) || 0;
+    positions.set(id, { x: currentWidth, y: level, level });
+    levelWidths.set(level, currentWidth + 1);
+    
+    if (node.children) {
+      node.children.forEach(childId => {
+        if (!visited.has(childId)) {
+          queue.push({ id: childId, level: level + 1 });
+        }
+      });
+    }
+  }
+  
+  // Normalize positions
+  const maxLevel = Math.max(...Array.from(levelWidths.keys()));
+  const result = new Map<string, { x: number; y: number }>();
+  
+  positions.forEach((pos, id) => {
+    const levelWidth = levelWidths.get(pos.level) || 1;
+    const x = ((pos.x + 0.5) / levelWidth) * 100;
+    const y = 10 + (pos.level / (maxLevel || 1)) * 75;
+    result.set(id, { x, y });
+  });
+  
+  return result;
+};
+
+// Gate shapes
+const OrGate: React.FC<{ x: number; y: number; size: number }> = ({ x, y, size }) => (
+  <path
+    d={`M ${x - size} ${y + size} 
+        Q ${x - size} ${y - size * 0.5}, ${x} ${y - size}
+        Q ${x + size} ${y - size * 0.5}, ${x + size} ${y + size}
+        Q ${x} ${y + size * 0.3}, ${x - size} ${y + size} Z`}
+    fill="hsl(var(--primary))"
+    stroke="hsl(var(--primary-foreground))"
+    strokeWidth="1"
+  />
+);
+
+const AndGate: React.FC<{ x: number; y: number; size: number }> = ({ x, y, size }) => (
+  <path
+    d={`M ${x - size} ${y + size} 
+        L ${x - size} ${y - size * 0.3}
+        Q ${x} ${y - size}, ${x + size} ${y - size * 0.3}
+        L ${x + size} ${y + size}
+        L ${x - size} ${y + size} Z`}
+    fill="hsl(var(--secondary))"
+    stroke="hsl(var(--secondary-foreground))"
+    strokeWidth="1"
+  />
+);
+
+const BasicEvent: React.FC<{ x: number; y: number; size: number; status: 'normal' | 'warning' | 'alarm' }> = ({ x, y, size, status }) => {
+  const fillColor = status === 'alarm' 
+    ? 'hsl(var(--destructive))' 
+    : status === 'warning' 
+      ? 'hsl(45 100% 50%)' 
+      : 'hsl(var(--muted))';
+  
+  return (
+    <circle
+      cx={x}
+      cy={y}
+      r={size}
+      fill={fillColor}
+      stroke="hsl(var(--border))"
+      strokeWidth="2"
+    />
+  );
+};
+
+export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
   faultTree,
-  isEditMode,
-  onImageUpload,
-  onImageRemove,
-  onPositionChange,
+  tags,
+  onTagClick,
+  onHoveredTagChange,
 }) => {
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef({ x: 0, y: 0 });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
-  const handleReset = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+  const tagMap = useMemo(() => {
+    const map = new Map<string, TagData>();
+    tags.forEach(t => map.set(t.id, t));
+    return map;
+  }, [tags]);
+  
+  const nodePositions = useMemo(() => 
+    calculateNodePositions(faultTree.nodes, faultTree.topEventId),
+    [faultTree]
+  );
+  
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, FaultTreeNode>();
+    faultTree.nodes.forEach(n => map.set(n.id, n));
+    return map;
+  }, [faultTree]);
+  
+  const getNodeStatus = (node: FaultTreeNode): 'normal' | 'warning' | 'alarm' => {
+    if (node.tagId) {
+      const tag = tagMap.get(node.tagId);
+      if (tag) return tag.status;
+    }
+    return 'normal';
   };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!faultTree.imageUrl) return;
-    setIsDragging(true);
-    dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPan({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y
-    });
-  };
-
-  const handleMouseUp = () => setIsDragging(false);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onImageUpload(file);
+  
+  const handleNodeClick = (node: FaultTreeNode) => {
+    if (node.tagId && onTagClick) {
+      onTagClick(node.tagId);
     }
   };
-
-  return (
-    <div className="relative h-full flex flex-col bg-muted/20 rounded-lg overflow-hidden">
-      {/* Controls */}
-      <div className="absolute top-2 right-2 z-10 flex gap-1">
-        <Button size="icon" variant="secondary" className="h-8 w-8" onClick={handleZoomIn}>
-          <ZoomIn className="h-4 w-4" />
-        </Button>
-        <Button size="icon" variant="secondary" className="h-8 w-8" onClick={handleZoomOut}>
-          <ZoomOut className="h-4 w-4" />
-        </Button>
-        <Button size="icon" variant="secondary" className="h-8 w-8" onClick={handleReset}>
-          <RotateCcw className="h-4 w-4" />
-        </Button>
-        {isEditMode && faultTree.imageUrl && (
-          <Button size="icon" variant="destructive" className="h-8 w-8" onClick={onImageRemove}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Image viewer */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
-        {faultTree.imageUrl ? (
-          <div
-            className="h-full w-full flex items-center justify-center"
-            style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-              transition: isDragging ? 'none' : 'transform 0.2s ease'
-            }}
-          >
-            <img
-              src={faultTree.imageUrl}
-              alt={faultTree.name}
-              className="max-h-full max-w-full object-contain pointer-events-none"
-              draggable={false}
-            />
-          </div>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center gap-4 text-muted-foreground">
-            <p className="text-sm">暂无故障树图片</p>
-            {isEditMode && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  上传故障树图片
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Info bar */}
-      <div className="p-2 border-t border-border bg-card/50 flex justify-between items-center text-xs text-muted-foreground">
-        <span>{faultTree.name}</span>
-        <span>缩放: {Math.round(zoom * 100)}%</span>
-      </div>
-
-      {/* Hidden file input for edit mode with existing image */}
-      {isEditMode && faultTree.imageUrl && (
-        <>
-          <Button
-            variant="outline"
-            size="sm"
-            className="absolute bottom-12 left-2 gap-2"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="h-4 w-4" />
-            更换图片
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
+  
+  const handleNodeHover = (node: FaultTreeNode | null) => {
+    if (onHoveredTagChange) {
+      onHoveredTagChange(node?.tagId || null);
+    }
+  };
+  
+  // Render connections
+  const connections = useMemo(() => {
+    const lines: JSX.Element[] = [];
+    
+    faultTree.nodes.forEach(node => {
+      if (!node.children) return;
+      
+      const parentPos = nodePositions.get(node.id);
+      if (!parentPos) return;
+      
+      node.children.forEach(childId => {
+        const childPos = nodePositions.get(childId);
+        if (!childPos) return;
+        
+        lines.push(
+          <line
+            key={`${node.id}-${childId}`}
+            x1={`${parentPos.x}%`}
+            y1={`${parentPos.y + 3}%`}
+            x2={`${childPos.x}%`}
+            y2={`${childPos.y - 3}%`}
+            stroke="hsl(var(--border))"
+            strokeWidth="2"
           />
-        </>
-      )}
+        );
+      });
+    });
+    
+    return lines;
+  }, [faultTree, nodePositions]);
+  
+  return (
+    <div className="w-full h-full bg-background/50 rounded-lg p-4">
+      <div className="text-sm font-medium mb-2 text-foreground">{faultTree.name}</div>
+      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+        {/* Connections */}
+        <g>{connections}</g>
+        
+        {/* Nodes */}
+        {faultTree.nodes.map(node => {
+          const pos = nodePositions.get(node.id);
+          if (!pos) return null;
+          
+          const status = getNodeStatus(node);
+          const isTopEvent = node.id === faultTree.topEventId;
+          const size = isTopEvent ? 5 : 3.5;
+          
+          return (
+            <g
+              key={node.id}
+              className={node.tagId ? 'cursor-pointer' : ''}
+              onClick={() => handleNodeClick(node)}
+              onMouseEnter={() => handleNodeHover(node)}
+              onMouseLeave={() => handleNodeHover(null)}
+            >
+              {node.type === 'or' && <OrGate x={pos.x} y={pos.y} size={size} />}
+              {node.type === 'and' && <AndGate x={pos.x} y={pos.y} size={size} />}
+              {node.type === 'basic_event' && <BasicEvent x={pos.x} y={pos.y} size={size} status={status} />}
+              {node.type === 'undeveloped' && (
+                <polygon
+                  points={`${pos.x},${pos.y - size} ${pos.x + size},${pos.y} ${pos.x},${pos.y + size} ${pos.x - size},${pos.y}`}
+                  fill="hsl(var(--muted))"
+                  stroke="hsl(var(--border))"
+                  strokeWidth="1"
+                />
+              )}
+              
+              {/* Label */}
+              <text
+                x={pos.x}
+                y={pos.y + size + 2.5}
+                textAnchor="middle"
+                fontSize="2"
+                fill="hsl(var(--foreground))"
+                className="pointer-events-none"
+              >
+                {node.label}
+              </text>
+              
+              {/* Tag ID indicator */}
+              {node.tagId && (
+                <text
+                  x={pos.x}
+                  y={pos.y + size + 4.5}
+                  textAnchor="middle"
+                  fontSize="1.5"
+                  fill="hsl(var(--muted-foreground))"
+                  className="pointer-events-none"
+                >
+                  {node.tagId}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 };

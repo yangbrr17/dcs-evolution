@@ -361,7 +361,6 @@ const DCSInterface: React.FC = () => {
           <SafetyAnalysisPanel
             areaId={currentAreaId}
             tags={currentTags}
-            isEditMode={isEditMode}
             onTagClick={(tagId) => {
               const tag = allTags.find(t => t.id === tagId);
               if (tag) setSelectedTag(tag);
