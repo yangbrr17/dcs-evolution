@@ -1,237 +1,239 @@
 import React, { useMemo } from 'react';
-import { BowTieConfig, BowTieEvent, TagData, TagStatus } from '@/types/dcs';
-import { cn } from '@/lib/utils';
+import { BowTieConfig, BowTieEvent, TagData } from '@/types/dcs';
 
 interface BowTieViewerProps {
   bowTie: BowTieConfig;
   tags: TagData[];
   onEventClick?: (event: BowTieEvent) => void;
-  onTopEventHover?: (tagId: string | null) => void;
+  onHoveredTagChange?: (tagId: string | null) => void;
 }
 
-const BowTieViewer: React.FC<BowTieViewerProps> = ({
+const getEventColor = (type: BowTieEvent['type'], status: 'normal' | 'warning' | 'alarm') => {
+  if (status === 'alarm') return 'hsl(var(--destructive))';
+  if (status === 'warning') return 'hsl(45 100% 50%)';
+  
+  switch (type) {
+    case 'threat': return 'hsl(200 80% 50%)';
+    case 'barrier': return 'hsl(150 60% 45%)';
+    case 'top_event': return 'hsl(var(--destructive))';
+    case 'recovery': return 'hsl(45 80% 50%)';
+    case 'consequence': return 'hsl(280 60% 50%)';
+    default: return 'hsl(var(--muted))';
+  }
+};
+
+const EventNode: React.FC<{
+  event: BowTieEvent;
+  status: 'normal' | 'warning' | 'alarm';
+  onClick?: () => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+}> = ({ event, status, onClick, onMouseEnter, onMouseLeave }) => {
+  const color = getEventColor(event.type, status);
+  const isTopEvent = event.type === 'top_event';
+  const size = isTopEvent ? 8 : 5;
+  
+  return (
+    <g
+      className={event.tagId ? 'cursor-pointer' : ''}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {event.type === 'threat' && (
+        <polygon
+          points={`${event.position.x - size},${event.position.y} 
+                   ${event.position.x},${event.position.y - size * 0.7} 
+                   ${event.position.x + size},${event.position.y} 
+                   ${event.position.x},${event.position.y + size * 0.7}`}
+          fill={color}
+          stroke="hsl(var(--border))"
+          strokeWidth="0.3"
+        />
+      )}
+      
+      {event.type === 'barrier' && (
+        <rect
+          x={event.position.x - size * 0.4}
+          y={event.position.y - size}
+          width={size * 0.8}
+          height={size * 2}
+          fill={color}
+          stroke="hsl(var(--border))"
+          strokeWidth="0.3"
+          rx="0.5"
+        />
+      )}
+      
+      {event.type === 'top_event' && (
+        <>
+          <circle
+            cx={event.position.x}
+            cy={event.position.y}
+            r={size}
+            fill={color}
+            stroke="hsl(var(--background))"
+            strokeWidth="0.5"
+          />
+          {status !== 'normal' && (
+            <circle
+              cx={event.position.x}
+              cy={event.position.y}
+              r={size + 1.5}
+              fill="none"
+              stroke={color}
+              strokeWidth="0.5"
+              opacity="0.5"
+              className="animate-pulse"
+            />
+          )}
+        </>
+      )}
+      
+      {event.type === 'recovery' && (
+        <rect
+          x={event.position.x - size}
+          y={event.position.y - size * 0.5}
+          width={size * 2}
+          height={size}
+          fill={color}
+          stroke="hsl(var(--border))"
+          strokeWidth="0.3"
+          rx="1"
+        />
+      )}
+      
+      {event.type === 'consequence' && (
+        <polygon
+          points={`${event.position.x},${event.position.y - size * 0.8} 
+                   ${event.position.x + size},${event.position.y + size * 0.5} 
+                   ${event.position.x - size},${event.position.y + size * 0.5}`}
+          fill={color}
+          stroke="hsl(var(--border))"
+          strokeWidth="0.3"
+        />
+      )}
+      
+      {/* Label */}
+      <text
+        x={event.position.x}
+        y={event.position.y + (isTopEvent ? size + 3 : size + 2)}
+        textAnchor="middle"
+        fontSize={isTopEvent ? "2.5" : "2"}
+        fill="hsl(var(--foreground))"
+        className="pointer-events-none"
+      >
+        {event.label}
+      </text>
+      
+      {/* Tag indicator */}
+      {event.tagId && (
+        <text
+          x={event.position.x}
+          y={event.position.y + (isTopEvent ? size + 5.5 : size + 4)}
+          textAnchor="middle"
+          fontSize="1.5"
+          fill="hsl(var(--muted-foreground))"
+          className="pointer-events-none"
+        >
+          {event.tagId}
+        </text>
+      )}
+    </g>
+  );
+};
+
+export const BowTieViewer: React.FC<BowTieViewerProps> = ({
   bowTie,
   tags,
   onEventClick,
-  onTopEventHover,
+  onHoveredTagChange,
 }) => {
-  // Get status for events with linked tags
-  const eventStatuses = useMemo(() => {
-    const statuses: Record<string, TagStatus> = {};
-    bowTie.events.forEach(event => {
-      if (event.tagId) {
-        const tag = tags.find(t => t.id === event.tagId);
-        statuses[event.id] = tag?.status || 'normal';
-      }
-    });
-    return statuses;
-  }, [bowTie.events, tags]);
-
-  // Event type colors
-  const getEventColor = (event: BowTieEvent): string => {
-    const status = eventStatuses[event.id];
-    if (status === 'alarm') return 'fill-status-alarm stroke-status-alarm';
-    if (status === 'warning') return 'fill-status-warning stroke-status-warning';
-
-    switch (event.type) {
-      case 'threat':
-        return 'fill-orange-500/20 stroke-orange-500';
-      case 'barrier':
-        return 'fill-blue-500/20 stroke-blue-500';
-      case 'top_event':
-        return 'fill-red-500/20 stroke-red-500';
-      case 'recovery':
-        return 'fill-green-500/20 stroke-green-500';
-      case 'consequence':
-        return 'fill-purple-500/20 stroke-purple-500';
-      default:
-        return 'fill-muted stroke-muted-foreground';
+  const tagMap = useMemo(() => {
+    const map = new Map<string, TagData>();
+    tags.forEach(t => map.set(t.id, t));
+    return map;
+  }, [tags]);
+  
+  const eventMap = useMemo(() => {
+    const map = new Map<string, BowTieEvent>();
+    bowTie.events.forEach(e => map.set(e.id, e));
+    return map;
+  }, [bowTie]);
+  
+  const getEventStatus = (event: BowTieEvent): 'normal' | 'warning' | 'alarm' => {
+    if (event.tagId) {
+      const tag = tagMap.get(event.tagId);
+      if (tag) return tag.status;
+    }
+    return 'normal';
+  };
+  
+  const handleEventClick = (event: BowTieEvent) => {
+    if (event.tagId && onEventClick) {
+      onEventClick(event);
     }
   };
-
-  const getEventShape = (event: BowTieEvent) => {
-    const x = event.position.x;
-    const y = event.position.y;
-    const width = 12;
-    const height = 8;
-
-    switch (event.type) {
-      case 'threat':
-        // Hexagon pointing right
-        return `M${x - width/2},${y} L${x - width/4},${y - height/2} L${x + width/4},${y - height/2} L${x + width/2},${y} L${x + width/4},${y + height/2} L${x - width/4},${y + height/2} Z`;
-      case 'barrier':
-        // Rectangle with rounded ends (vertical barrier)
-        return `M${x - 1.5},${y - height/2} L${x + 1.5},${y - height/2} L${x + 1.5},${y + height/2} L${x - 1.5},${y + height/2} Z`;
-      case 'top_event':
-        // Circle (rendered separately)
-        return '';
-      case 'recovery':
-        // Rectangle
-        return `M${x - width/3},${y - height/2} L${x + width/3},${y - height/2} L${x + width/3},${y + height/2} L${x - width/3},${y + height/2} Z`;
-      case 'consequence':
-        // Diamond
-        return `M${x},${y - height/2} L${x + width/3},${y} L${x},${y + height/2} L${x - width/3},${y} Z`;
-      default:
-        return '';
+  
+  const handleEventHover = (event: BowTieEvent | null) => {
+    if (onHoveredTagChange) {
+      onHoveredTagChange(event?.tagId || null);
     }
   };
-
-  // Render links between events
-  const renderLinks = () => {
-    return bowTie.links.map((link, index) => {
-      const fromEvent = bowTie.events.find(e => e.id === link.from);
-      const toEvent = bowTie.events.find(e => e.id === link.to);
+  
+  // Render links
+  const links = useMemo(() => {
+    return bowTie.links.map((link, idx) => {
+      const fromEvent = eventMap.get(link.from);
+      const toEvent = eventMap.get(link.to);
+      
       if (!fromEvent || !toEvent) return null;
-
-      const fromX = fromEvent.position.x;
-      const fromY = fromEvent.position.y;
-      const toX = toEvent.position.x;
-      const toY = toEvent.position.y;
-
-      // Calculate control points for curved lines
-      const midX = (fromX + toX) / 2;
+      
+      const fromStatus = getEventStatus(fromEvent);
+      const toStatus = getEventStatus(toEvent);
+      const hasAlert = fromStatus !== 'normal' || toStatus !== 'normal';
       
       return (
-        <path
-          key={`link-${index}`}
-          d={`M${fromX + 6},${fromY} Q${midX},${fromY} ${midX},${(fromY + toY) / 2} T${toX - 6},${toY}`}
-          className="stroke-muted-foreground/50 fill-none"
-          strokeWidth="0.3"
-          strokeDasharray="1,0.5"
-          markerEnd="url(#arrowhead)"
+        <line
+          key={`${link.from}-${link.to}-${idx}`}
+          x1={`${fromEvent.position.x}%`}
+          y1={`${fromEvent.position.y}%`}
+          x2={`${toEvent.position.x}%`}
+          y2={`${toEvent.position.y}%`}
+          stroke={hasAlert ? 'hsl(var(--destructive))' : 'hsl(var(--border))'}
+          strokeWidth={hasAlert ? "0.5" : "0.3"}
+          strokeDasharray={hasAlert ? "none" : "1,0.5"}
+          opacity={hasAlert ? 1 : 0.6}
         />
       );
     });
-  };
-
+  }, [bowTie, eventMap, tagMap]);
+  
   return (
-    <div className="relative h-full w-full bg-card/50 rounded-lg overflow-hidden">
-      {/* Title */}
-      <div className="absolute top-2 left-2 z-10">
-        <h3 className="text-sm font-medium text-foreground">{bowTie.name}</h3>
-      </div>
-
-      {/* Legend */}
-      <div className="absolute top-2 right-2 z-10 flex gap-3 text-xs">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-orange-500/20 border border-orange-500 rounded-sm" />
-          <span className="text-muted-foreground">威胁</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-1 h-3 bg-blue-500 rounded-sm" />
-          <span className="text-muted-foreground">屏障</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded-full" />
-          <span className="text-muted-foreground">顶事件</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded-sm" />
-          <span className="text-muted-foreground">恢复</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-purple-500/20 border border-purple-500 rotate-45" />
-          <span className="text-muted-foreground">后果</span>
-        </div>
-      </div>
-
-      <svg
-        className="w-full h-full"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <defs>
-          <marker
-            id="arrowhead"
-            markerWidth="4"
-            markerHeight="4"
-            refX="3"
-            refY="2"
-            orient="auto"
-          >
-            <polygon
-              points="0 0, 4 2, 0 4"
-              className="fill-muted-foreground/50"
-            />
-          </marker>
-        </defs>
-
+    <div className="w-full h-full bg-background/50 rounded-lg p-4">
+      <div className="text-sm font-medium mb-2 text-foreground">{bowTie.name}</div>
+      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
         {/* Links */}
-        {renderLinks()}
-
+        <g>{links}</g>
+        
         {/* Events */}
-        {bowTie.events.map(event => {
-          const status = eventStatuses[event.id];
-          const isAlarming = status === 'alarm' || status === 'warning';
-
-          return (
-            <g
-              key={event.id}
-              className={cn(
-                'cursor-pointer transition-opacity hover:opacity-80',
-                isAlarming && 'animate-pulse'
-              )}
-              onClick={() => onEventClick?.(event)}
-              onMouseEnter={() => {
-                if (event.type === 'top_event' && event.tagId) {
-                  onTopEventHover?.(event.tagId);
-                }
-              }}
-              onMouseLeave={() => {
-                if (event.type === 'top_event') {
-                  onTopEventHover?.(null);
-                }
-              }}
-            >
-              {event.type === 'top_event' ? (
-                <circle
-                  cx={event.position.x}
-                  cy={event.position.y}
-                  r="5"
-                  className={cn(getEventColor(event), 'stroke-2')}
-                />
-              ) : event.type === 'barrier' ? (
-                <rect
-                  x={event.position.x - 1.5}
-                  y={event.position.y - 4}
-                  width="3"
-                  height="8"
-                  rx="0.5"
-                  className={cn(getEventColor(event), 'stroke-1')}
-                />
-              ) : (
-                <path
-                  d={getEventShape(event)}
-                  className={cn(getEventColor(event), 'stroke-1')}
-                />
-              )}
-              
-              {/* Label */}
-              <text
-                x={event.position.x}
-                y={event.type === 'barrier' ? event.position.y + 7 : event.position.y + 8}
-                textAnchor="middle"
-                className="fill-foreground text-[2px] font-medium"
-              >
-                {event.label}
-              </text>
-
-              {/* Tag indicator */}
-              {event.tagId && (
-                <circle
-                  cx={event.position.x + 5}
-                  cy={event.position.y - 4}
-                  r="1"
-                  className={cn(
-                    status === 'alarm' ? 'fill-status-alarm' :
-                    status === 'warning' ? 'fill-status-warning' :
-                    'fill-status-normal'
-                  )}
-                />
-              )}
-            </g>
-          );
-        })}
+        {bowTie.events.map(event => (
+          <EventNode
+            key={event.id}
+            event={event}
+            status={getEventStatus(event)}
+            onClick={() => handleEventClick(event)}
+            onMouseEnter={() => handleEventHover(event)}
+            onMouseLeave={() => handleEventHover(null)}
+          />
+        ))}
+        
+        {/* Legend */}
+        <g transform="translate(2, 92)">
+          <text fontSize="1.5" fill="hsl(var(--muted-foreground))">
+            ◇威胁 ▮屏障 ●顶事件 ▬恢复 △后果
+          </text>
+        </g>
       </svg>
     </div>
   );

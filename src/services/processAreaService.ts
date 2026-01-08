@@ -5,7 +5,7 @@ export async function fetchProcessAreas(): Promise<ProcessArea[]> {
   const { data, error } = await supabase
     .from('process_areas')
     .select('*')
-    .order('id');
+    .order('display_order');
 
   if (error) {
     console.error('Failed to fetch process areas:', error);

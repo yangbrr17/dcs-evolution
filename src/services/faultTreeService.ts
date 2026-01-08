@@ -1,132 +1,78 @@
-import { FaultTreeConfig } from '@/types/dcs';
-import { supabase } from '@/integrations/supabase/client';
+import { FaultTreeStructure } from '@/types/dcs';
 
-// Default fault tree configurations with preset positions
-export const DEFAULT_FAULT_TREES: FaultTreeConfig[] = [
+// Preset fault tree structures with DCS variables
+export const DEFAULT_FAULT_TREES: FaultTreeStructure[] = [
+  // Reactor runaway fault tree
   {
-    id: 'ft-reactor',
-    name: '反应器故障树',
-    imageUrl: null,
-    topEventTagId: 'TI-101',
+    id: 'ft-reactor-runaway',
+    name: '反应器飞温故障树',
     areaId: 'reactor',
-    position: { x: 10, y: 60 }
+    topEventId: 'top-1',
+    nodes: [
+      { id: 'top-1', type: 'or', label: '反应器飞温', tagId: 'TI-101', children: ['g1', 'g2'] },
+      { id: 'g1', type: 'and', label: '进料异常导致飞温', children: ['e1', 'e2'] },
+      { id: 'g2', type: 'or', label: '热量移除不足', children: ['e3', 'e4', 'e5'] },
+      { id: 'e1', type: 'basic_event', label: '原料油流量过大', tagId: 'FI-101' },
+      { id: 'e2', type: 'basic_event', label: '反应器压力异常', tagId: 'PI-101' },
+      { id: 'e3', type: 'basic_event', label: '提升管温度过高', tagId: 'TI-102' },
+      { id: 'e4', type: 'basic_event', label: '沉降器温度异常', tagId: 'TI-103' },
+      { id: 'e5', type: 'basic_event', label: '液位控制失效', tagId: 'LI-101' },
+    ]
   },
+  // Regenerator overtemp fault tree
   {
-    id: 'ft-regenerator',
-    name: '再生器故障树',
-    imageUrl: null,
-    topEventTagId: 'TI-201',
+    id: 'ft-regenerator-overtemp',
+    name: '再生器超温故障树',
     areaId: 'regenerator',
-    position: { x: 10, y: 60 }
+    topEventId: 'top-regen',
+    nodes: [
+      { id: 'top-regen', type: 'or', label: '再生器超温', tagId: 'TI-201', children: ['g-r1', 'g-r2'] },
+      { id: 'g-r1', type: 'and', label: '燃烧失控', children: ['e-r1', 'e-r2'] },
+      { id: 'g-r2', type: 'or', label: '冷却不足', children: ['e-r3', 'e-r4'] },
+      { id: 'e-r1', type: 'basic_event', label: '密相温度过高', tagId: 'TI-201' },
+      { id: 'e-r2', type: 'basic_event', label: '主风流量异常', tagId: 'FI-201' },
+      { id: 'e-r3', type: 'basic_event', label: '稀相温度过高', tagId: 'TI-202' },
+      { id: 'e-r4', type: 'basic_event', label: '压力异常', tagId: 'PI-201' },
+    ]
   },
+  // Fractionator fault tree
   {
     id: 'ft-fractionator',
-    name: '分馏塔故障树',
-    imageUrl: null,
-    topEventTagId: 'TI-301',
+    name: '分馏塔异常故障树',
     areaId: 'fractionator',
-    position: { x: 10, y: 60 }
+    topEventId: 'top-frac',
+    nodes: [
+      { id: 'top-frac', type: 'or', label: '分馏塔异常', tagId: 'TI-301', children: ['g-f1', 'g-f2'] },
+      { id: 'g-f1', type: 'and', label: '温度分布异常', children: ['e-f1', 'e-f2', 'e-f3'] },
+      { id: 'g-f2', type: 'or', label: '物料平衡失调', children: ['e-f4', 'e-f5'] },
+      { id: 'e-f1', type: 'basic_event', label: '塔顶温度异常', tagId: 'TI-301' },
+      { id: 'e-f2', type: 'basic_event', label: '塔中温度异常', tagId: 'TI-302' },
+      { id: 'e-f3', type: 'basic_event', label: '塔底温度异常', tagId: 'TI-303' },
+      { id: 'e-f4', type: 'basic_event', label: '回流流量不足', tagId: 'FI-301' },
+      { id: 'e-f5', type: 'basic_event', label: '液位异常', tagId: 'LI-301' },
+    ]
   },
+  // Overview - combined critical events
   {
     id: 'ft-overview',
-    name: '总体故障树',
-    imageUrl: null,
+    name: '系统关键故障树',
     areaId: 'overview',
-    position: { x: 10, y: 60 }
+    topEventId: 'top-sys',
+    nodes: [
+      { id: 'top-sys', type: 'or', label: '系统重大事故', children: ['g-sys1', 'g-sys2', 'g-sys3'] },
+      { id: 'g-sys1', type: 'basic_event', label: '反应器飞温', tagId: 'TI-101' },
+      { id: 'g-sys2', type: 'basic_event', label: '再生器超温', tagId: 'TI-201' },
+      { id: 'g-sys3', type: 'basic_event', label: '分馏塔异常', tagId: 'TI-301' },
+    ]
   }
 ];
 
-// Fetch fault trees for an area
-export const fetchFaultTrees = async (areaId?: string): Promise<FaultTreeConfig[]> => {
-  try {
-    let query = supabase.from('fault_trees').select('*');
-    if (areaId) {
-      query = query.eq('area_id', areaId);
-    }
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    
-    if (!data || data.length === 0) {
-      // Return defaults for the area
-      return DEFAULT_FAULT_TREES.filter(ft => !areaId || ft.areaId === areaId);
-    }
-    
-    return data.map(row => ({
-      id: row.id,
-      name: row.name,
-      imageUrl: row.image_url,
-      topEventTagId: row.top_event_tag_id || undefined,
-      areaId: row.area_id,
-      position: (row.position as { x: number; y: number }) || { x: 10, y: 60 }
-    }));
-  } catch (error) {
-    console.error('Error fetching fault trees:', error);
-    return DEFAULT_FAULT_TREES.filter(ft => !areaId || ft.areaId === areaId);
-  }
+// Get fault trees for a specific area
+export const getFaultTreesForArea = (areaId: string): FaultTreeStructure[] => {
+  return DEFAULT_FAULT_TREES.filter(ft => ft.areaId === areaId);
 };
 
-// Save or update a fault tree
-export const saveFaultTree = async (faultTree: FaultTreeConfig): Promise<boolean> => {
-  try {
-    const { error } = await supabase
-      .from('fault_trees')
-      .upsert({
-        id: faultTree.id,
-        name: faultTree.name,
-        image_url: faultTree.imageUrl,
-        top_event_tag_id: faultTree.topEventTagId || null,
-        area_id: faultTree.areaId,
-        position: faultTree.position
-      });
-    
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error saving fault tree:', error);
-    return false;
-  }
-};
-
-// Upload fault tree image
-export const uploadFaultTreeImage = async (
-  faultTreeId: string,
-  file: File
-): Promise<string | null> => {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `fault-tree-${faultTreeId}-${Date.now()}.${fileExt}`;
-    const filePath = `fault-trees/${fileName}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('process-images')
-      .upload(filePath, file, { upsert: true });
-    
-    if (uploadError) throw uploadError;
-    
-    const { data } = supabase.storage
-      .from('process-images')
-      .getPublicUrl(filePath);
-    
-    return data.publicUrl;
-  } catch (error) {
-    console.error('Error uploading fault tree image:', error);
-    return null;
-  }
-};
-
-// Delete fault tree
-export const deleteFaultTree = async (id: string): Promise<boolean> => {
-  try {
-    const { error } = await supabase
-      .from('fault_trees')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-    return true;
-  } catch (error) {
-    console.error('Error deleting fault tree:', error);
-    return false;
-  }
+// Get a specific fault tree by ID
+export const getFaultTreeById = (id: string): FaultTreeStructure | undefined => {
+  return DEFAULT_FAULT_TREES.find(ft => ft.id === id);
 };
