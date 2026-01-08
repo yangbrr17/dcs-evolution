@@ -95,33 +95,20 @@ export interface CausalityGraph {
   links: CausalLink[];
 }
 
-// Fault Tree types
-export type FaultTreeGateType = 'and' | 'or' | 'basic_event' | 'undeveloped';
-
-export interface FaultTreeNode {
-  id: string;
-  type: FaultTreeGateType;
-  label: string;
-  tagId?: string;
-  children?: string[];
+// Fault Tree types - 基于有向图的因果链结构
+export interface FaultTreeLink {
+  from: string;         // 源变量tagId
+  to: string;           // 目标变量tagId
+  contribution: number; // 贡献度 0-100
+  description?: string; // 关系描述
 }
 
 export interface FaultTreeStructure {
   id: string;
   name: string;
   areaId: string;
-  topEventId: string;
-  nodes: FaultTreeNode[];
-}
-
-// Legacy config for backwards compatibility
-export interface FaultTreeConfig {
-  id: string;
-  name: string;
-  imageUrl: string | null;
-  topEventTagId?: string;
-  areaId: string;
-  position: { x: number; y: number };
+  topEventTagId: string;   // 顶事件对应的tagId
+  links: FaultTreeLink[];  // 因果链接列表
 }
 
 // Bow-Tie types
@@ -151,6 +138,6 @@ export interface BowTieConfig {
 
 // Safety Analysis config
 export interface SafetyAnalysisConfig {
-  faultTrees: FaultTreeConfig[];
+  faultTrees: FaultTreeStructure[];
   bowTies: BowTieConfig[];
 }

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { FaultTreeStructure, FaultTreeNode, TagData } from '@/types/dcs';
+import { FaultTreeStructure, FaultTreeLink, TagData } from '@/types/dcs';
 
 interface FaultTreeViewerProps {
   faultTree: FaultTreeStructure;
@@ -8,96 +8,133 @@ interface FaultTreeViewerProps {
   onHoveredTagChange?: (tagId: string | null) => void;
 }
 
-// Calculate node positions based on tree structure
-const calculateNodePositions = (nodes: FaultTreeNode[], topEventId: string) => {
-  const nodeMap = new Map<string, FaultTreeNode>();
-  nodes.forEach(n => nodeMap.set(n.id, n));
+// 计算节点位置 - 基于图的层级布局
+const calculateNodePositions = (
+  links: FaultTreeLink[],
+  topEventTagId: string
+): Map<string, { x: number; y: number; level: number }> => {
+  // 收集所有节点
+  const allNodes = new Set<string>();
+  allNodes.add(topEventTagId);
+  links.forEach(link => {
+    allNodes.add(link.from);
+    allNodes.add(link.to);
+  });
   
-  const positions = new Map<string, { x: number; y: number; level: number }>();
-  const levelWidths = new Map<number, number>();
+  // 构建入边和出边图
+  const inEdges = new Map<string, string[]>();
+  const outEdges = new Map<string, string[]>();
   
-  // BFS to assign levels
-  const queue: { id: string; level: number }[] = [{ id: topEventId, level: 0 }];
+  allNodes.forEach(node => {
+    inEdges.set(node, []);
+    outEdges.set(node, []);
+  });
+  
+  links.forEach(link => {
+    outEdges.get(link.from)?.push(link.to);
+    inEdges.get(link.to)?.push(link.from);
+  });
+  
+  // 使用BFS从顶事件反向计算层级
+  const levels = new Map<string, number>();
+  const queue: { id: string; level: number }[] = [{ id: topEventTagId, level: 0 }];
   const visited = new Set<string>();
   
   while (queue.length > 0) {
     const { id, level } = queue.shift()!;
-    if (visited.has(id)) continue;
-    visited.add(id);
     
-    const node = nodeMap.get(id);
-    if (!node) continue;
-    
-    const currentWidth = levelWidths.get(level) || 0;
-    positions.set(id, { x: currentWidth, y: level, level });
-    levelWidths.set(level, currentWidth + 1);
-    
-    if (node.children) {
-      node.children.forEach(childId => {
-        if (!visited.has(childId)) {
-          queue.push({ id: childId, level: level + 1 });
-        }
-      });
+    if (visited.has(id)) {
+      // 如果已访问，更新为更小的层级（更接近顶事件）
+      const existingLevel = levels.get(id) ?? level;
+      levels.set(id, Math.min(existingLevel, level));
+      continue;
     }
+    
+    visited.add(id);
+    levels.set(id, level);
+    
+    // 找到所有指向当前节点的源节点
+    const sources = inEdges.get(id) || [];
+    sources.forEach(sourceId => {
+      if (!visited.has(sourceId)) {
+        queue.push({ id: sourceId, level: level + 1 });
+      }
+    });
   }
   
-  // Normalize positions
-  const maxLevel = Math.max(...Array.from(levelWidths.keys()));
-  const result = new Map<string, { x: number; y: number }>();
-  
-  positions.forEach((pos, id) => {
-    const levelWidth = levelWidths.get(pos.level) || 1;
-    const x = ((pos.x + 0.5) / levelWidth) * 100;
-    const y = 10 + (pos.level / (maxLevel || 1)) * 75;
-    result.set(id, { x, y });
+  // 处理未被访问的节点（可能是独立的或指向其他节点的）
+  allNodes.forEach(node => {
+    if (!levels.has(node)) {
+      levels.set(node, 3); // 放在底层
+    }
   });
   
-  return result;
+  // 按层级分组
+  const levelGroups = new Map<number, string[]>();
+  levels.forEach((level, node) => {
+    if (!levelGroups.has(level)) {
+      levelGroups.set(level, []);
+    }
+    levelGroups.get(level)?.push(node);
+  });
+  
+  // 计算最终位置
+  const maxLevel = Math.max(...Array.from(levels.values()));
+  const positions = new Map<string, { x: number; y: number; level: number }>();
+  
+  levelGroups.forEach((nodes, level) => {
+    const count = nodes.length;
+    nodes.forEach((node, idx) => {
+      // 水平位置：均匀分布
+      const x = count === 1 ? 50 : 15 + (idx / (count - 1)) * 70;
+      // 垂直位置：顶事件在上，底层在下
+      const y = 12 + (level / Math.max(maxLevel, 1)) * 70;
+      positions.set(node, { x, y, level });
+    });
+  });
+  
+  return positions;
 };
 
-// Gate shapes
-const OrGate: React.FC<{ x: number; y: number; size: number }> = ({ x, y, size }) => (
-  <path
-    d={`M ${x - size} ${y + size} 
-        Q ${x - size} ${y - size * 0.5}, ${x} ${y - size}
-        Q ${x + size} ${y - size * 0.5}, ${x + size} ${y + size}
-        Q ${x} ${y + size * 0.3}, ${x - size} ${y + size} Z`}
-    fill="hsl(var(--primary))"
-    stroke="hsl(var(--primary-foreground))"
-    strokeWidth="1"
-  />
-);
-
-const AndGate: React.FC<{ x: number; y: number; size: number }> = ({ x, y, size }) => (
-  <path
-    d={`M ${x - size} ${y + size} 
-        L ${x - size} ${y - size * 0.3}
-        Q ${x} ${y - size}, ${x + size} ${y - size * 0.3}
-        L ${x + size} ${y + size}
-        L ${x - size} ${y + size} Z`}
-    fill="hsl(var(--secondary))"
-    stroke="hsl(var(--secondary-foreground))"
-    strokeWidth="1"
-  />
-);
-
-const BasicEvent: React.FC<{ x: number; y: number; size: number; status: 'normal' | 'warning' | 'alarm' }> = ({ x, y, size, status }) => {
-  const fillColor = status === 'alarm' 
-    ? 'hsl(var(--destructive))' 
-    : status === 'warning' 
-      ? 'hsl(45 100% 50%)' 
-      : 'hsl(var(--muted))';
+// 获取曲线路径
+const getCurvedPath = (x1: number, y1: number, x2: number, y2: number) => {
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const distance = Math.sqrt(dx * dx + dy * dy);
   
-  return (
-    <circle
-      cx={x}
-      cy={y}
-      r={size}
-      fill={fillColor}
-      stroke="hsl(var(--border))"
-      strokeWidth="2"
-    />
-  );
+  if (distance === 0) return `M ${x1} ${y1} L ${x2} ${y2}`;
+  
+  const curveOffset = Math.min(distance * 0.15, 6);
+  const perpX = -dy / distance;
+  const perpY = dx / distance;
+  const ctrlX = midX + perpX * curveOffset;
+  const ctrlY = midY + perpY * curveOffset;
+  
+  return `M ${x1} ${y1} Q ${ctrlX} ${ctrlY} ${x2} ${y2}`;
+};
+
+// 计算曲线上的点
+const getCurvePointAt = (x1: number, y1: number, x2: number, y2: number, t: number = 0.5) => {
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  if (distance === 0) return { x: x1, y: y1 };
+  
+  const curveOffset = Math.min(distance * 0.15, 6);
+  const perpX = -dy / distance;
+  const perpY = dx / distance;
+  const ctrlX = midX + perpX * curveOffset;
+  const ctrlY = midY + perpY * curveOffset;
+  
+  const px = (1-t)*(1-t)*x1 + 2*(1-t)*t*ctrlX + t*t*x2;
+  const py = (1-t)*(1-t)*y1 + 2*(1-t)*t*ctrlY + t*t*y2;
+  
+  return { x: px, y: py };
 };
 
 export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
@@ -106,133 +143,228 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
   onTagClick,
   onHoveredTagChange,
 }) => {
+  // 创建tagId到tag的映射
   const tagMap = useMemo(() => {
     const map = new Map<string, TagData>();
     tags.forEach(t => map.set(t.id, t));
     return map;
   }, [tags]);
   
+  // 计算节点位置
   const nodePositions = useMemo(() => 
-    calculateNodePositions(faultTree.nodes, faultTree.topEventId),
+    calculateNodePositions(faultTree.links, faultTree.topEventTagId),
     [faultTree]
   );
   
-  const nodeMap = useMemo(() => {
-    const map = new Map<string, FaultTreeNode>();
-    faultTree.nodes.forEach(n => map.set(n.id, n));
-    return map;
+  // 获取节点状态
+  const getNodeStatus = (tagId: string): 'normal' | 'warning' | 'alarm' => {
+    const tag = tagMap.get(tagId);
+    return tag?.status || 'normal';
+  };
+  
+  // 获取节点颜色
+  const getNodeColor = (tagId: string, isTopEvent: boolean): string => {
+    const status = getNodeStatus(tagId);
+    if (status === 'alarm') return '#ef4444';
+    if (status === 'warning') return '#f59e0b';
+    if (isTopEvent) return 'hsl(var(--primary))';
+    return 'hsl(var(--muted))';
+  };
+  
+  // 获取节点边框颜色
+  const getNodeStroke = (tagId: string): string => {
+    const status = getNodeStatus(tagId);
+    if (status === 'alarm') return '#dc2626';
+    if (status === 'warning') return '#d97706';
+    return 'hsl(var(--border))';
+  };
+  
+  // 获取所有节点
+  const allNodeIds = useMemo(() => {
+    const nodes = new Set<string>();
+    nodes.add(faultTree.topEventTagId);
+    faultTree.links.forEach(link => {
+      nodes.add(link.from);
+      nodes.add(link.to);
+    });
+    return Array.from(nodes);
   }, [faultTree]);
   
-  const getNodeStatus = (node: FaultTreeNode): 'normal' | 'warning' | 'alarm' => {
-    if (node.tagId) {
-      const tag = tagMap.get(node.tagId);
-      if (tag) return tag.status;
-    }
-    return 'normal';
-  };
-  
-  const handleNodeClick = (node: FaultTreeNode) => {
-    if (node.tagId && onTagClick) {
-      onTagClick(node.tagId);
+  const handleNodeClick = (tagId: string) => {
+    if (onTagClick && tagMap.has(tagId)) {
+      onTagClick(tagId);
     }
   };
   
-  const handleNodeHover = (node: FaultTreeNode | null) => {
+  const handleNodeHover = (tagId: string | null) => {
     if (onHoveredTagChange) {
-      onHoveredTagChange(node?.tagId || null);
+      onHoveredTagChange(tagId);
     }
   };
-  
-  // Render connections
-  const connections = useMemo(() => {
-    const lines: JSX.Element[] = [];
-    
-    faultTree.nodes.forEach(node => {
-      if (!node.children) return;
-      
-      const parentPos = nodePositions.get(node.id);
-      if (!parentPos) return;
-      
-      node.children.forEach(childId => {
-        const childPos = nodePositions.get(childId);
-        if (!childPos) return;
-        
-        lines.push(
-          <line
-            key={`${node.id}-${childId}`}
-            x1={`${parentPos.x}%`}
-            y1={`${parentPos.y + 3}%`}
-            x2={`${childPos.x}%`}
-            y2={`${childPos.y - 3}%`}
-            stroke="hsl(var(--border))"
-            strokeWidth="2"
-          />
-        );
-      });
-    });
-    
-    return lines;
-  }, [faultTree, nodePositions]);
   
   return (
-    <div className="w-full h-full bg-background/50 rounded-lg p-4">
-      <div className="text-sm font-medium mb-2 text-foreground">{faultTree.name}</div>
-      <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-        {/* Connections */}
-        <g>{connections}</g>
+    <div className="w-full h-full bg-background/50 rounded-lg p-2">
+      <div className="text-sm font-medium mb-1 text-foreground flex items-center gap-2">
+        {faultTree.name}
+        <span className="text-xs text-muted-foreground">
+          (顶事件: {faultTree.topEventTagId})
+        </span>
+      </div>
+      
+      <svg 
+        width="100%" 
+        height="calc(100% - 24px)" 
+        viewBox="0 0 100 100" 
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          {/* 普通箭头 */}
+          <marker
+            id="ft-arrow-normal"
+            markerWidth="2.5"
+            markerHeight="1.5"
+            refX="2.2"
+            refY="0.75"
+            orient="auto"
+            markerUnits="userSpaceOnUse"
+          >
+            <path d="M 0 0.15 L 2.5 0.75 L 0 1.35 L 0.4 0.75 Z" fill="#9ca3af" />
+          </marker>
+          
+          {/* 高贡献箭头 */}
+          <marker
+            id="ft-arrow-critical"
+            markerWidth="3"
+            markerHeight="1.8"
+            refX="2.7"
+            refY="0.9"
+            orient="auto"
+            markerUnits="userSpaceOnUse"
+          >
+            <path d="M 0 0.15 L 3 0.9 L 0 1.65 L 0.5 0.9 Z" fill="#ef4444" />
+          </marker>
+        </defs>
         
-        {/* Nodes */}
-        {faultTree.nodes.map(node => {
-          const pos = nodePositions.get(node.id);
+        {/* 绘制连接线 */}
+        {faultTree.links.map((link, idx) => {
+          const fromPos = nodePositions.get(link.from);
+          const toPos = nodePositions.get(link.to);
+          
+          if (!fromPos || !toPos) return null;
+          
+          const pathD = getCurvedPath(fromPos.x, fromPos.y, toPos.x, toPos.y);
+          const labelPos = getCurvePointAt(fromPos.x, fromPos.y, toPos.x, toPos.y, 0.5);
+          const isHighContribution = link.contribution >= 50;
+          
+          return (
+            <g key={`link-${idx}`}>
+              {/* 连接线 */}
+              <path
+                d={pathD}
+                fill="none"
+                stroke={isHighContribution ? '#ef4444' : '#9ca3af'}
+                strokeWidth={isHighContribution ? 0.5 : 0.35}
+                strokeOpacity={0.8}
+                strokeLinecap="round"
+                strokeDasharray="1.5 0.8"
+                markerEnd={`url(#ft-arrow-${isHighContribution ? 'critical' : 'normal'})`}
+                className={isHighContribution ? 'animate-pulse' : ''}
+              />
+              
+              {/* 贡献度标签 */}
+              <g transform={`translate(${labelPos.x}, ${labelPos.y})`}>
+                <rect
+                  x="-4"
+                  y="-1.8"
+                  width="8"
+                  height="3"
+                  rx="0.5"
+                  fill={isHighContribution ? '#fef2f2' : '#f9fafb'}
+                  stroke={isHighContribution ? '#fca5a5' : '#e5e7eb'}
+                  strokeWidth="0.15"
+                />
+                <text
+                  x="0"
+                  y="0.5"
+                  textAnchor="middle"
+                  fontSize="1.6"
+                  fontWeight="500"
+                  fill={isHighContribution ? '#dc2626' : '#6b7280'}
+                >
+                  {link.contribution}%
+                </text>
+              </g>
+            </g>
+          );
+        })}
+        
+        {/* 绘制节点 */}
+        {allNodeIds.map(tagId => {
+          const pos = nodePositions.get(tagId);
           if (!pos) return null;
           
-          const status = getNodeStatus(node);
-          const isTopEvent = node.id === faultTree.topEventId;
-          const size = isTopEvent ? 5 : 3.5;
+          const isTopEvent = tagId === faultTree.topEventTagId;
+          const tag = tagMap.get(tagId);
+          const status = getNodeStatus(tagId);
+          const nodeSize = isTopEvent ? 6 : 4.5;
           
           return (
             <g
-              key={node.id}
-              className={node.tagId ? 'cursor-pointer' : ''}
-              onClick={() => handleNodeClick(node)}
-              onMouseEnter={() => handleNodeHover(node)}
+              key={tagId}
+              className="cursor-pointer"
+              onClick={() => handleNodeClick(tagId)}
+              onMouseEnter={() => handleNodeHover(tagId)}
               onMouseLeave={() => handleNodeHover(null)}
             >
-              {node.type === 'or' && <OrGate x={pos.x} y={pos.y} size={size} />}
-              {node.type === 'and' && <AndGate x={pos.x} y={pos.y} size={size} />}
-              {node.type === 'basic_event' && <BasicEvent x={pos.x} y={pos.y} size={size} status={status} />}
-              {node.type === 'undeveloped' && (
-                <polygon
-                  points={`${pos.x},${pos.y - size} ${pos.x + size},${pos.y} ${pos.x},${pos.y + size} ${pos.x - size},${pos.y}`}
-                  fill="hsl(var(--muted))"
-                  stroke="hsl(var(--border))"
-                  strokeWidth="1"
-                />
-              )}
+              {/* 节点背景 - 圆角矩形 */}
+              <rect
+                x={pos.x - nodeSize}
+                y={pos.y - nodeSize * 0.6}
+                width={nodeSize * 2}
+                height={nodeSize * 1.2}
+                rx="1"
+                fill={getNodeColor(tagId, isTopEvent)}
+                stroke={getNodeStroke(tagId)}
+                strokeWidth={isTopEvent ? 0.5 : 0.3}
+                className={status !== 'normal' ? 'animate-pulse' : ''}
+              />
               
-              {/* Label */}
+              {/* 位号 */}
               <text
                 x={pos.x}
-                y={pos.y + size + 2.5}
+                y={pos.y + 0.5}
                 textAnchor="middle"
-                fontSize="2"
-                fill="hsl(var(--foreground))"
-                className="pointer-events-none"
+                fontSize={isTopEvent ? 2.2 : 1.8}
+                fontWeight="600"
+                fill={status !== 'normal' ? '#ffffff' : 'hsl(var(--foreground))'}
               >
-                {node.label}
+                {tagId}
               </text>
               
-              {/* Tag ID indicator */}
-              {node.tagId && (
+              {/* 当前值（如果有tag数据） */}
+              {tag && (
                 <text
                   x={pos.x}
-                  y={pos.y + size + 4.5}
+                  y={pos.y + nodeSize * 0.6 + 2.5}
+                  textAnchor="middle"
+                  fontSize="1.4"
+                  fill="hsl(var(--muted-foreground))"
+                >
+                  {tag.currentValue.toFixed(1)}{tag.unit}
+                </text>
+              )}
+              
+              {/* 顶事件标识 */}
+              {isTopEvent && (
+                <text
+                  x={pos.x}
+                  y={pos.y - nodeSize * 0.6 - 1.5}
                   textAnchor="middle"
                   fontSize="1.5"
-                  fill="hsl(var(--muted-foreground))"
-                  className="pointer-events-none"
+                  fontWeight="500"
+                  fill="hsl(var(--primary))"
                 >
-                  {node.tagId}
+                  ▼ 顶事件
                 </text>
               )}
             </g>
