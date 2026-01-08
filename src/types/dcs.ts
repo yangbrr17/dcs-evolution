@@ -94,3 +94,44 @@ export interface CausalityGraph {
   version: string;
   links: CausalLink[];
 }
+
+// Fault Tree types
+export interface FaultTreeConfig {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  topEventTagId?: string;
+  areaId: string;
+  position: { x: number; y: number };
+}
+
+// Bow-Tie types
+export type BowTieEventType = 'threat' | 'barrier' | 'top_event' | 'recovery' | 'consequence';
+
+export interface BowTieEvent {
+  id: string;
+  type: BowTieEventType;
+  label: string;
+  tagId?: string;
+  position: { x: number; y: number };
+}
+
+export interface BowTieLink {
+  from: string;
+  to: string;
+}
+
+export interface BowTieConfig {
+  id: string;
+  name: string;
+  areaId: string;
+  topEventId: string;
+  events: BowTieEvent[];
+  links: BowTieLink[];
+}
+
+// Safety Analysis config
+export interface SafetyAnalysisConfig {
+  faultTrees: FaultTreeConfig[];
+  bowTies: BowTieConfig[];
+}

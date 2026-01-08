@@ -18,6 +18,7 @@ import AreaNavigation from './AreaNavigation';
 import UserMenu from './UserMenu';
 import ShiftHandover from './ShiftHandover';
 import OperationLogPanel from './OperationLogPanel';
+import SafetyAnalysisPanel from './SafetyAnalysisPanel';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, Play, Pause, Bell, Clock } from 'lucide-react';
@@ -321,38 +322,52 @@ const DCSInterface: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Process Diagram Area */}
-        <div className="flex-1 relative">
-          <ProcessImageBackground
-            imageUrl={currentArea.imageUrl}
-            onImageUpload={handleImageUpload}
-            onImageRemove={handleImageRemove}
-            isEditMode={isEditMode}
-          >
-            {/* Causality arrows layer */}
-            <CausalityArrows
-              hoveredAlarmTagId={hoveredAlarmTagId}
-              tags={currentTags}
-            />
-            
-            {/* Tags layer */}
-            {currentTags.map((tag) => (
-              <DraggableTag
-                key={tag.id}
-                tag={tag}
-                isEditMode={isEditMode}
-                onPositionChange={handlePositionChange}
-                onClick={setSelectedTag}
-                onHover={setHoveredAlarmTagId}
-                isHighlighted={highlightedTagIds.has(tag.id)}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 relative">
+            <ProcessImageBackground
+              imageUrl={currentArea.imageUrl}
+              onImageUpload={handleImageUpload}
+              onImageRemove={handleImageRemove}
+              isEditMode={isEditMode}
+            >
+              {/* Causality arrows layer */}
+              <CausalityArrows
+                hoveredAlarmTagId={hoveredAlarmTagId}
+                tags={currentTags}
               />
-            ))}
-          </ProcessImageBackground>
+              
+              {/* Tags layer */}
+              {currentTags.map((tag) => (
+                <DraggableTag
+                  key={tag.id}
+                  tag={tag}
+                  isEditMode={isEditMode}
+                  onPositionChange={handlePositionChange}
+                  onClick={setSelectedTag}
+                  onHover={setHoveredAlarmTagId}
+                  isHighlighted={highlightedTagIds.has(tag.id)}
+                />
+              ))}
+            </ProcessImageBackground>
 
-          {isEditMode && (
-            <div className="absolute bottom-4 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border">
-              拖拽标签可调整位置 | 点击"更换图片"上传"{currentArea.name}"的流程图
-            </div>
-          )}
+            {isEditMode && (
+              <div className="absolute bottom-4 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border">
+                拖拽标签可调整位置 | 点击"更换图片"上传"{currentArea.name}"的流程图
+              </div>
+            )}
+          </div>
+
+          {/* Safety Analysis Panel - Bottom Drawer */}
+          <SafetyAnalysisPanel
+            areaId={currentAreaId}
+            tags={currentTags}
+            isEditMode={isEditMode}
+            onTagClick={(tagId) => {
+              const tag = allTags.find(t => t.id === tagId);
+              if (tag) setSelectedTag(tag);
+            }}
+            onHoveredAlarmTagChange={setHoveredAlarmTagId}
+          />
         </div>
 
         {/* Right Sidebar */}
