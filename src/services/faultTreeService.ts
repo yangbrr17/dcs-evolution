@@ -1,78 +1,127 @@
+// Fault Tree Service - 基于因果链的故障树配置
+// 故障树使用有向图表示变量之间的贡献关系，与报警因果链相似
+
 import { FaultTreeStructure } from '@/types/dcs';
 
-// Preset fault tree structures with DCS variables
-export const DEFAULT_FAULT_TREES: FaultTreeStructure[] = [
-  // Reactor runaway fault tree
+// 默认故障树配置 - 每个区域的关键故障场景
+const DEFAULT_FAULT_TREES: FaultTreeStructure[] = [
+  // 反应器飞温故障树
   {
     id: 'ft-reactor-runaway',
-    name: '反应器飞温故障树',
+    name: '反应器飞温',
     areaId: 'reactor',
-    topEventId: 'top-1',
-    nodes: [
-      { id: 'top-1', type: 'or', label: '反应器飞温', tagId: 'TI-101', children: ['g1', 'g2'] },
-      { id: 'g1', type: 'and', label: '进料异常导致飞温', children: ['e1', 'e2'] },
-      { id: 'g2', type: 'or', label: '热量移除不足', children: ['e3', 'e4', 'e5'] },
-      { id: 'e1', type: 'basic_event', label: '原料油流量过大', tagId: 'FI-101' },
-      { id: 'e2', type: 'basic_event', label: '反应器压力异常', tagId: 'PI-101' },
-      { id: 'e3', type: 'basic_event', label: '提升管温度过高', tagId: 'TI-102' },
-      { id: 'e4', type: 'basic_event', label: '沉降器温度异常', tagId: 'TI-103' },
-      { id: 'e5', type: 'basic_event', label: '液位控制失效', tagId: 'LI-101' },
-    ]
+    topEventTagId: 'TI-101', // 顶事件：反应器温度
+    links: [
+      { from: 'FI-101', to: 'TI-101', contribution: 65, description: '进料流量影响反应温度' },
+      { from: 'PI-101', to: 'TI-101', contribution: 35, description: '压力影响反应温度' },
+      { from: 'TI-101', to: 'TI-102', contribution: 80, description: '反应器温度影响提升管出口温度' },
+      { from: 'TI-102', to: 'TI-103', contribution: 70, description: '提升管温度影响沉降器温度' },
+      { from: 'FI-101', to: 'PI-101', contribution: 45, description: '进料流量影响反应器压力' },
+      { from: 'LI-101', to: 'TI-101', contribution: 25, description: '液位影响反应温度' },
+    ],
   },
-  // Regenerator overtemp fault tree
+  
+  // 再生器超温故障树
   {
     id: 'ft-regenerator-overtemp',
-    name: '再生器超温故障树',
+    name: '再生器超温',
     areaId: 'regenerator',
-    topEventId: 'top-regen',
-    nodes: [
-      { id: 'top-regen', type: 'or', label: '再生器超温', tagId: 'TI-201', children: ['g-r1', 'g-r2'] },
-      { id: 'g-r1', type: 'and', label: '燃烧失控', children: ['e-r1', 'e-r2'] },
-      { id: 'g-r2', type: 'or', label: '冷却不足', children: ['e-r3', 'e-r4'] },
-      { id: 'e-r1', type: 'basic_event', label: '密相温度过高', tagId: 'TI-201' },
-      { id: 'e-r2', type: 'basic_event', label: '主风流量异常', tagId: 'FI-201' },
-      { id: 'e-r3', type: 'basic_event', label: '稀相温度过高', tagId: 'TI-202' },
-      { id: 'e-r4', type: 'basic_event', label: '压力异常', tagId: 'PI-201' },
-    ]
+    topEventTagId: 'TI-201', // 顶事件：密相温度
+    links: [
+      { from: 'FI-201', to: 'TI-201', contribution: 75, description: '主风流量影响密相温度' },
+      { from: 'AI-201', to: 'TI-201', contribution: 40, description: 'CO含量影响燃烧温度' },
+      { from: 'TI-201', to: 'TI-202', contribution: 85, description: '密相温度影响稀相温度' },
+      { from: 'FI-201', to: 'AI-201', contribution: 50, description: '主风流量影响CO含量' },
+      { from: 'TI-201', to: 'AI-202', contribution: 60, description: '密相温度影响O2含量' },
+      { from: 'AI-201', to: 'AI-202', contribution: 90, description: 'CO与O2相关' },
+      { from: 'FI-201', to: 'PI-201', contribution: 55, description: '主风流量影响压力' },
+    ],
   },
-  // Fractionator fault tree
+  
+  // 烟气O2异常故障树 (AI-202)
   {
-    id: 'ft-fractionator',
-    name: '分馏塔异常故障树',
+    id: 'ft-flue-gas-o2',
+    name: '烟气O2异常',
+    areaId: 'regenerator',
+    topEventTagId: 'AI-202', // 顶事件：烟气O2含量
+    links: [
+      { from: 'AI-201', to: 'AI-202', contribution: 90, description: 'CO燃烧消耗O2' },
+      { from: 'TI-201', to: 'AI-202', contribution: 60, description: '温度影响燃烧效率' },
+      { from: 'FI-201', to: 'AI-201', contribution: 50, description: '主风流量决定CO生成' },
+      { from: 'TI-201', to: 'AI-201', contribution: 45, description: '温度影响CO生成' },
+      { from: 'FI-201', to: 'TI-201', contribution: 75, description: '主风流量影响燃烧温度' },
+    ],
+  },
+  
+  // 分馏塔异常故障树
+  {
+    id: 'ft-fractionator-upset',
+    name: '分馏塔温度异常',
     areaId: 'fractionator',
-    topEventId: 'top-frac',
-    nodes: [
-      { id: 'top-frac', type: 'or', label: '分馏塔异常', tagId: 'TI-301', children: ['g-f1', 'g-f2'] },
-      { id: 'g-f1', type: 'and', label: '温度分布异常', children: ['e-f1', 'e-f2', 'e-f3'] },
-      { id: 'g-f2', type: 'or', label: '物料平衡失调', children: ['e-f4', 'e-f5'] },
-      { id: 'e-f1', type: 'basic_event', label: '塔顶温度异常', tagId: 'TI-301' },
-      { id: 'e-f2', type: 'basic_event', label: '塔中温度异常', tagId: 'TI-302' },
-      { id: 'e-f3', type: 'basic_event', label: '塔底温度异常', tagId: 'TI-303' },
-      { id: 'e-f4', type: 'basic_event', label: '回流流量不足', tagId: 'FI-301' },
-      { id: 'e-f5', type: 'basic_event', label: '液位异常', tagId: 'LI-301' },
-    ]
+    topEventTagId: 'TI-301', // 顶事件：塔顶温度
+    links: [
+      { from: 'FI-301', to: 'TI-301', contribution: 55, description: '回流流量影响塔顶温度' },
+      { from: 'TI-302', to: 'TI-301', contribution: 70, description: '塔中温度影响塔顶温度' },
+      { from: 'TI-303', to: 'TI-302', contribution: 75, description: '塔底温度影响塔中温度' },
+      { from: 'LI-301', to: 'TI-303', contribution: 40, description: '液位影响塔底温度' },
+      { from: 'FI-302', to: 'TI-303', contribution: 35, description: '柴油出流量影响塔底温度' },
+      { from: 'TI-301', to: 'PI-301', contribution: 60, description: '塔顶温度影响塔顶压力' },
+    ],
   },
-  // Overview - combined critical events
+  
+  // 系统总览 - 综合故障树
   {
-    id: 'ft-overview',
-    name: '系统关键故障树',
+    id: 'ft-overview-integrated',
+    name: '装置综合安全',
     areaId: 'overview',
-    topEventId: 'top-sys',
-    nodes: [
-      { id: 'top-sys', type: 'or', label: '系统重大事故', children: ['g-sys1', 'g-sys2', 'g-sys3'] },
-      { id: 'g-sys1', type: 'basic_event', label: '反应器飞温', tagId: 'TI-101' },
-      { id: 'g-sys2', type: 'basic_event', label: '再生器超温', tagId: 'TI-201' },
-      { id: 'g-sys3', type: 'basic_event', label: '分馏塔异常', tagId: 'TI-301' },
-    ]
-  }
+    topEventTagId: 'TI-101', // 顶事件：反应器温度（核心变量）
+    links: [
+      // 反应区
+      { from: 'FI-101', to: 'TI-101', contribution: 65, description: '进料流量→反应温度' },
+      { from: 'PI-101', to: 'TI-101', contribution: 35, description: '反应压力→反应温度' },
+      // 再生区影响反应区
+      { from: 'TI-201', to: 'TI-101', contribution: 30, description: '再生温度→反应温度(催化剂循环)' },
+      // 再生区
+      { from: 'FI-201', to: 'TI-201', contribution: 75, description: '主风流量→再生温度' },
+      { from: 'AI-201', to: 'AI-202', contribution: 90, description: 'CO含量→O2含量' },
+      // 分馏区
+      { from: 'TI-101', to: 'TI-303', contribution: 50, description: '反应温度→塔底温度' },
+      { from: 'TI-303', to: 'TI-301', contribution: 65, description: '塔底温度→塔顶温度' },
+    ],
+  },
 ];
 
-// Get fault trees for a specific area
-export const getFaultTreesForArea = (areaId: string): FaultTreeStructure[] => {
-  return DEFAULT_FAULT_TREES.filter(ft => ft.areaId === areaId);
-};
+let currentFaultTrees: FaultTreeStructure[] = [...DEFAULT_FAULT_TREES];
 
-// Get a specific fault tree by ID
-export const getFaultTreeById = (id: string): FaultTreeStructure | undefined => {
-  return DEFAULT_FAULT_TREES.find(ft => ft.id === id);
-};
+// 获取指定区域的故障树配置
+export function getFaultTreesForArea(areaId: string): FaultTreeStructure[] {
+  return currentFaultTrees.filter(ft => ft.areaId === areaId);
+}
+
+// 获取所有故障树
+export function getAllFaultTrees(): FaultTreeStructure[] {
+  return currentFaultTrees;
+}
+
+// 根据ID获取故障树
+export function getFaultTreeById(id: string): FaultTreeStructure | undefined {
+  return currentFaultTrees.find(ft => ft.id === id);
+}
+
+// 获取故障树中涉及的所有tagId
+export function getFaultTreeTagIds(faultTree: FaultTreeStructure): string[] {
+  const tagIds = new Set<string>();
+  tagIds.add(faultTree.topEventTagId);
+  faultTree.links.forEach(link => {
+    tagIds.add(link.from);
+    tagIds.add(link.to);
+  });
+  return Array.from(tagIds);
+}
+
+// 重置为默认配置
+export function resetFaultTrees(): void {
+  currentFaultTrees = [...DEFAULT_FAULT_TREES];
+}
+
+export { DEFAULT_FAULT_TREES };
