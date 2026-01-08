@@ -322,8 +322,8 @@ const DCSInterface: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Process Diagram Area */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 relative">
+        <div className="flex-1 flex flex-col relative">
+          <div className="flex-1 relative overflow-hidden">
             <ProcessImageBackground
               imageUrl={currentArea.imageUrl}
               onImageUpload={handleImageUpload}
@@ -351,7 +351,7 @@ const DCSInterface: React.FC = () => {
             </ProcessImageBackground>
 
             {isEditMode && (
-              <div className="absolute bottom-4 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border">
+              <div className="absolute bottom-14 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border z-10">
                 拖拽标签可调整位置 | 点击"更换图片"上传"{currentArea.name}"的流程图
               </div>
             )}
