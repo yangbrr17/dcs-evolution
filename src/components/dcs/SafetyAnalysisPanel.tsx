@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronUp, ChevronDown, GitBranch, Shield } from 'lucide-react';
+import { GitBranch, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FaultTreeViewer } from './FaultTreeViewer';
@@ -91,118 +91,106 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
   };
   
   return (
-    <div 
-      className={`absolute bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border transition-all duration-300 z-20 ${
-        isExpanded ? 'h-[40%]' : 'h-10'
-      }`}
-    >
+    <div className="h-full flex flex-col bg-card border-l border-border">
       {/* Header */}
-      <div 
-        className="flex items-center justify-between px-4 h-10 cursor-pointer hover:bg-accent/50"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
+      <div className="flex items-center justify-between px-4 h-10 border-b border-border shrink-0">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Shield className="h-4 w-4 text-primary" />
           <span>安全分析</span>
-          {!isExpanded && (
-            <span className="text-xs text-muted-foreground">
-              (故障树: {faultTrees.length}, Bow-Tie: {bowTies.length})
-            </span>
-          )}
         </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6">
-          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-        </Button>
+        <span className="text-xs text-muted-foreground">
+          故障树: {faultTrees.length} | Bow-Tie: {bowTies.length}
+        </span>
       </div>
       
       {/* Content */}
-      {isExpanded && (
-        <div className="h-[calc(100%-2.5rem)] p-4">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="w-fit">
-              <TabsTrigger value="fault-tree" className="gap-1">
-                <GitBranch className="h-3 w-3" />
-                故障树
-              </TabsTrigger>
-              <TabsTrigger value="bow-tie" className="gap-1">
-                <Shield className="h-3 w-3" />
-                Bow-Tie
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="fault-tree" className="flex-1 mt-2 overflow-hidden">
-              {faultTrees.length > 0 ? (
-                <div className="h-full flex flex-col">
-                  {faultTrees.length > 1 && (
-                    <div className="flex gap-2 mb-2 flex-wrap">
-                      {faultTrees.map((ft, idx) => (
-                        <Button
-                          key={ft.id}
-                          variant={selectedFaultTreeIdx === idx ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedFaultTreeIdx(idx)}
-                        >
-                          {ft.name}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                  {currentFaultTree && (
-                    <div className="flex-1 overflow-hidden">
-                      <FaultTreeViewer
-                        faultTree={currentFaultTree}
-                        tags={tags}
-                        onTagClick={onTagClick}
-                        onHoveredTagChange={onHoveredAlarmTagChange}
-                        highlightTagId={targetTagId}
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  该区域暂无故障树配置
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="bow-tie" className="flex-1 mt-2 overflow-hidden">
-              {bowTies.length > 0 ? (
-                <div className="h-full flex flex-col">
-                  {bowTies.length > 1 && (
-                    <div className="flex gap-2 mb-2 flex-wrap">
-                      {bowTies.map((bt, idx) => (
-                        <Button
-                          key={bt.id}
-                          variant={selectedBowTieIdx === idx ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setSelectedBowTieIdx(idx)}
-                        >
-                          {bt.name}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                  {currentBowTie && (
-                    <div className="flex-1 overflow-hidden">
-                      <BowTieViewer
-                        bowTie={currentBowTie}
-                        tags={tags}
-                        onEventClick={handleBowTieEventClick}
-                        onHoveredTagChange={onHoveredAlarmTagChange}
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  该区域暂无Bow-Tie配置
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
-      )}
+      <div className="flex-1 p-3 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+          <TabsList className="w-fit shrink-0">
+            <TabsTrigger value="fault-tree" className="gap-1 text-xs">
+              <GitBranch className="h-3 w-3" />
+              故障树
+            </TabsTrigger>
+            <TabsTrigger value="bow-tie" className="gap-1 text-xs">
+              <Shield className="h-3 w-3" />
+              Bow-Tie
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="fault-tree" className="flex-1 mt-2 overflow-hidden">
+            {faultTrees.length > 0 ? (
+              <div className="h-full flex flex-col">
+                {faultTrees.length > 1 && (
+                  <div className="flex gap-1 mb-2 flex-wrap shrink-0">
+                    {faultTrees.map((ft, idx) => (
+                      <Button
+                        key={ft.id}
+                        variant={selectedFaultTreeIdx === idx ? 'default' : 'outline'}
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => setSelectedFaultTreeIdx(idx)}
+                      >
+                        {ft.name}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                {currentFaultTree && (
+                  <div className="flex-1 overflow-hidden">
+                    <FaultTreeViewer
+                      faultTree={currentFaultTree}
+                      tags={tags}
+                      onTagClick={onTagClick}
+                      onHoveredTagChange={onHoveredAlarmTagChange}
+                      highlightTagId={targetTagId}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                该区域暂无故障树配置
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="bow-tie" className="flex-1 mt-2 overflow-hidden">
+            {bowTies.length > 0 ? (
+              <div className="h-full flex flex-col">
+                {bowTies.length > 1 && (
+                  <div className="flex gap-1 mb-2 flex-wrap shrink-0">
+                    {bowTies.map((bt, idx) => (
+                      <Button
+                        key={bt.id}
+                        variant={selectedBowTieIdx === idx ? 'default' : 'outline'}
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => setSelectedBowTieIdx(idx)}
+                      >
+                        {bt.name}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                {currentBowTie && (
+                  <div className="flex-1 overflow-hidden">
+                    <BowTieViewer
+                      bowTie={currentBowTie}
+                      tags={tags}
+                      onEventClick={handleBowTieEventClick}
+                      onHoveredTagChange={onHoveredAlarmTagChange}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                该区域暂无Bow-Tie配置
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };

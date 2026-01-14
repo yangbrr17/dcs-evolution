@@ -334,58 +334,66 @@ const DCSInterface: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Process Diagram Area */}
-        <div className="flex-1 flex flex-col relative">
-          <div className="flex-1 relative overflow-hidden">
-            <ProcessImageBackground
-              imageUrl={currentArea.imageUrl}
-              onImageUpload={handleImageUpload}
-              onImageRemove={handleImageRemove}
-              isEditMode={isEditMode}
-            >
-              {/* Causality arrows layer */}
-              <CausalityArrows
-                hoveredAlarmTagId={hoveredAlarmTagId}
-                tags={currentTags}
-              />
-              
-              {/* Tags layer */}
-              {currentTags.map((tag) => (
-                <DraggableTag
-                  key={tag.id}
-                  tag={tag}
+        <ResizablePanelGroup direction="horizontal" className="flex-1">
+          {/* Process Diagram Area */}
+          <ResizablePanel defaultSize={75} minSize={30}>
+            <div className="h-full flex flex-col relative">
+              <div className="flex-1 relative overflow-hidden">
+                <ProcessImageBackground
+                  imageUrl={currentArea.imageUrl}
+                  onImageUpload={handleImageUpload}
+                  onImageRemove={handleImageRemove}
                   isEditMode={isEditMode}
-                  onPositionChange={handlePositionChange}
-                  onClick={setSelectedTag}
-                  onHover={setHoveredAlarmTagId}
-                  isHighlighted={highlightedTagIds.has(tag.id)}
-                />
-              ))}
-            </ProcessImageBackground>
+                >
+                  {/* Causality arrows layer */}
+                  <CausalityArrows
+                    hoveredAlarmTagId={hoveredAlarmTagId}
+                    tags={currentTags}
+                  />
+                  
+                  {/* Tags layer */}
+                  {currentTags.map((tag) => (
+                    <DraggableTag
+                      key={tag.id}
+                      tag={tag}
+                      isEditMode={isEditMode}
+                      onPositionChange={handlePositionChange}
+                      onClick={setSelectedTag}
+                      onHover={setHoveredAlarmTagId}
+                      isHighlighted={highlightedTagIds.has(tag.id)}
+                    />
+                  ))}
+                </ProcessImageBackground>
 
-            {isEditMode && (
-              <div className="absolute bottom-14 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border z-10">
-                拖拽标签可调整位置 | 点击"更换图片"上传"{currentArea.name}"的流程图
+                {isEditMode && (
+                  <div className="absolute bottom-14 left-4 text-xs text-muted-foreground bg-card/80 px-3 py-2 rounded-md border border-border z-10">
+                    拖拽标签可调整位置 | 点击"更换图片"上传"{currentArea.name}"的流程图
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </ResizablePanel>
 
-          {/* Safety Analysis Panel - Bottom Drawer */}
-          <SafetyAnalysisPanel
-            areaId={currentAreaId}
-            tags={currentTags}
-            onTagClick={(tagId) => {
-              const tag = allTags.find(t => t.id === tagId);
-              if (tag) setSelectedTag(tag);
-            }}
-            onHoveredAlarmTagChange={setHoveredAlarmTagId}
-            isExpanded={safetyPanelExpanded}
-            onExpandedChange={setSafetyPanelExpanded}
-            activeTab={safetyPanelTab}
-            onActiveTabChange={(tab) => setSafetyPanelTab(tab as 'fault-tree' | 'bow-tie')}
-            targetTagId={targetFaultTreeTagId}
-          />
-        </div>
+          <ResizableHandle withHandle />
+
+          {/* Safety Analysis Panel - Resizable Side Panel */}
+          <ResizablePanel defaultSize={25} minSize={15} maxSize={60}>
+            <SafetyAnalysisPanel
+              areaId={currentAreaId}
+              tags={currentTags}
+              onTagClick={(tagId) => {
+                const tag = allTags.find(t => t.id === tagId);
+                if (tag) setSelectedTag(tag);
+              }}
+              onHoveredAlarmTagChange={setHoveredAlarmTagId}
+              isExpanded={safetyPanelExpanded}
+              onExpandedChange={setSafetyPanelExpanded}
+              activeTab={safetyPanelTab}
+              onActiveTabChange={(tab) => setSafetyPanelTab(tab as 'fault-tree' | 'bow-tie')}
+              targetTagId={targetFaultTreeTagId}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
 
         {/* Right Sidebar with Resizable Panels */}
         <div className="w-80 border-l border-border flex flex-col">
