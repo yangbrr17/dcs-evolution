@@ -128,6 +128,11 @@ export interface BowTieEvent {
   description?: string;  // 详细描述
   tagId?: string;
   position: { x: number; y: number };
+  
+  // 概率相关字段（主要用于 consequence 类型）
+  probability?: number;        // 发生概率（次/年），如 1e-5
+  severity?: 'low' | 'medium' | 'high' | 'catastrophic';  // 严重性等级
+  financialImpact?: string;    // 财务影响，如 "100-500万"
 }
 
 export interface BowTieLink {

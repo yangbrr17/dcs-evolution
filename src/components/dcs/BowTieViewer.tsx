@@ -394,7 +394,7 @@ const ThreatBox: React.FC<{
   );
 };
 
-// Consequence box - red border with right accent
+// Consequence box - red border with right accent + probability display
 const ConsequenceBox: React.FC<{
   event: BowTieEvent;
   x: number;
@@ -403,9 +403,66 @@ const ConsequenceBox: React.FC<{
   onClick: () => void;
   onHover: (hovered: boolean) => void;
 }> = ({ event, x, y, isHovered, onClick, onHover }) => {
-  const width = 100;
-  const height = 48;
+  const width = 120;
+  const height = 72;
   const accentWidth = 5;
+  
+  // Format probability in scientific notation (e.g., 2.5×10⁻⁴/年)
+  const formatProbability = (prob: number | undefined): string => {
+    if (!prob) return '-';
+    const exponent = Math.floor(Math.log10(prob));
+    const mantissa = prob / Math.pow(10, exponent);
+    const superscripts: { [key: string]: string } = {
+      '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'
+    };
+    const expStr = exponent.toString().split('').map(c => superscripts[c] || c).join('');
+    return `${mantissa.toFixed(1)}×10${expStr}/年`;
+  };
+  
+  // Get risk level color based on probability
+  const getRiskColor = (prob: number | undefined): string => {
+    if (!prob) return '#9CA3AF';
+    if (prob < 1e-6) return '#22C55E';      // Very low - green
+    if (prob < 1e-5) return '#84CC16';       // Low - lime
+    if (prob < 1e-4) return '#EAB308';       // Medium - yellow
+    if (prob < 1e-3) return '#F97316';       // High - orange
+    return '#EF4444';                        // Very high - red
+  };
+  
+  // Get risk level text
+  const getRiskLevel = (prob: number | undefined): string => {
+    if (!prob) return '未知';
+    if (prob < 1e-6) return '极低风险';
+    if (prob < 1e-5) return '低风险';
+    if (prob < 1e-4) return '中等风险';
+    if (prob < 1e-3) return '高风险';
+    return '极高风险';
+  };
+  
+  // Get severity color
+  const getSeverityColor = (severity: string | undefined): string => {
+    switch (severity) {
+      case 'low': return '#22C55E';
+      case 'medium': return '#EAB308';
+      case 'high': return '#F97316';
+      case 'catastrophic': return '#EF4444';
+      default: return '#9CA3AF';
+    }
+  };
+  
+  // Calculate risk bar width (0-100%)
+  const getRiskBarWidth = (prob: number | undefined): number => {
+    if (!prob) return 0;
+    // Log scale: 1e-6 = 0%, 1e-2 = 100%
+    const logProb = Math.log10(prob);
+    const minLog = -6;
+    const maxLog = -2;
+    const percentage = ((logProb - minLog) / (maxLog - minLog)) * 100;
+    return Math.max(0, Math.min(100, percentage));
+  };
+  
+  const riskColor = getRiskColor(event.probability);
+  const barWidth = getRiskBarWidth(event.probability);
   
   return (
     <g
@@ -443,17 +500,94 @@ const ConsequenceBox: React.FC<{
         fill="#C62828"
       />
       
+      {/* Severity indicator (top-left corner) */}
+      <circle
+        cx={10}
+        cy={12}
+        r={4}
+        fill={getSeverityColor(event.severity)}
+      />
+      
       {/* Label */}
       <text
-        x={width / 2 - accentWidth / 2}
-        y={height / 2 + 4}
-        textAnchor="middle"
+        x={20}
+        y={15}
+        textAnchor="start"
         fill="#1a1a1a"
         fontSize="10"
-        fontWeight="500"
+        fontWeight="600"
       >
         {event.label}
       </text>
+      
+      {/* Probability text */}
+      <text
+        x={8}
+        y={32}
+        textAnchor="start"
+        fill="#374151"
+        fontSize="9"
+      >
+        概率: {formatProbability(event.probability)}
+      </text>
+      
+      {/* Risk bar background */}
+      <rect
+        x={8}
+        y={40}
+        width={width - 24}
+        height={8}
+        fill="#E5E7EB"
+        rx={4}
+      />
+      
+      {/* Risk bar fill */}
+      <rect
+        x={8}
+        y={40}
+        width={(width - 24) * (barWidth / 100)}
+        height={8}
+        fill={riskColor}
+        rx={4}
+      />
+      
+      {/* Risk level text */}
+      <text
+        x={8}
+        y={60}
+        textAnchor="start"
+        fill={riskColor}
+        fontSize="8"
+        fontWeight="500"
+      >
+        {getRiskLevel(event.probability)}
+      </text>
+      
+      {/* Financial impact (if available and hovered) */}
+      {isHovered && event.financialImpact && (
+        <>
+          <rect
+            x={0}
+            y={height + 4}
+            width={width}
+            height={22}
+            fill="white"
+            stroke="#D1D5DB"
+            strokeWidth={1}
+            rx={3}
+            filter="url(#drop-shadow)"
+          />
+          <text
+            x={width / 2}
+            y={height + 18}
+            textAnchor="middle"
+            fill="#666"
+            fontSize="8"
+          >
+            💰 财务影响: {event.financialImpact}
+          </text>
+        </>
+      )}
     </g>
   );
 };

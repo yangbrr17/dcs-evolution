@@ -42,9 +42,9 @@ export const DEFAULT_BOWTIES: BowTieConfig[] = [
       { id: 'ma4', type: 'mitigating_action', label: '人员疏散', description: '按预案撤离现场', position: { x: 80, y: 85 } },
       
       // Consequences (right side) - 红色边框
-      { id: 'c1', type: 'consequence', label: '设备损坏', description: '反应器及管道损坏', position: { x: 95, y: 30 } },
-      { id: 'c2', type: 'consequence', label: '人员伤亡', description: '现场人员受伤或死亡', position: { x: 95, y: 55 } },
-      { id: 'c3', type: 'consequence', label: '环境污染', description: '油气泄漏造成污染', position: { x: 95, y: 80 } },
+      { id: 'c1', type: 'consequence', label: '设备损坏', description: '反应器及管道损坏', position: { x: 95, y: 30 }, probability: 2.5e-4, severity: 'high', financialImpact: '500-2000万' },
+      { id: 'c2', type: 'consequence', label: '人员伤亡', description: '现场人员受伤或死亡', position: { x: 95, y: 55 }, probability: 1.0e-5, severity: 'catastrophic', financialImpact: '不可估量' },
+      { id: 'c3', type: 'consequence', label: '环境污染', description: '油气泄漏造成污染', position: { x: 95, y: 80 }, probability: 5.0e-5, severity: 'medium', financialImpact: '100-500万' },
     ],
     links: [
       // Hazard to top event
@@ -100,9 +100,9 @@ export const DEFAULT_BOWTIES: BowTieConfig[] = [
       { id: 'ma-r3', type: 'mitigating_action', label: '人员撤离', description: '启动应急预案', position: { x: 80, y: 80 } },
       
       // Consequences
-      { id: 'c-r1', type: 'consequence', label: '催化剂烧结', description: '催化剂永久失活', position: { x: 95, y: 30 } },
-      { id: 'c-r2', type: 'consequence', label: '设备烧穿', description: '再生器壳体损坏', position: { x: 95, y: 55 } },
-      { id: 'c-r3', type: 'consequence', label: '火灾爆炸', description: '造成重大事故', position: { x: 95, y: 80 } },
+      { id: 'c-r1', type: 'consequence', label: '催化剂烧结', description: '催化剂永久失活', position: { x: 95, y: 30 }, probability: 3.0e-4, severity: 'medium', financialImpact: '200-800万' },
+      { id: 'c-r2', type: 'consequence', label: '设备烧穿', description: '再生器壳体损坏', position: { x: 95, y: 55 }, probability: 8.0e-5, severity: 'high', financialImpact: '1000-3000万' },
+      { id: 'c-r3', type: 'consequence', label: '火灾爆炸', description: '造成重大事故', position: { x: 95, y: 80 }, probability: 2.0e-5, severity: 'catastrophic', financialImpact: '5000万+' },
     ],
     links: [
       { from: 'hazard-r', to: 'te-regen' },
@@ -151,9 +151,9 @@ export const DEFAULT_BOWTIES: BowTieConfig[] = [
       { id: 'ma-f3', type: 'mitigating_action', label: '暂停进料', description: '切断上游来料', position: { x: 80, y: 80 } },
       
       // Consequences
-      { id: 'c-f1', type: 'consequence', label: '产品不合格', description: '分离效率下降', position: { x: 95, y: 30 } },
-      { id: 'c-f2', type: 'consequence', label: '设备损坏', description: '塔盘冲坏变形', position: { x: 95, y: 55 } },
-      { id: 'c-f3', type: 'consequence', label: '生产中断', description: '装置被迫停工', position: { x: 95, y: 80 } },
+      { id: 'c-f1', type: 'consequence', label: '产品不合格', description: '分离效率下降', position: { x: 95, y: 30 }, probability: 5.0e-3, severity: 'low', financialImpact: '50-200万' },
+      { id: 'c-f2', type: 'consequence', label: '设备损坏', description: '塔盘冲坏变形', position: { x: 95, y: 55 }, probability: 1.0e-4, severity: 'medium', financialImpact: '200-500万' },
+      { id: 'c-f3', type: 'consequence', label: '生产中断', description: '装置被迫停工', position: { x: 95, y: 80 }, probability: 2.0e-4, severity: 'medium', financialImpact: '300-800万' },
     ],
     links: [
       { from: 'hazard-f', to: 'te-frac' },
@@ -202,9 +202,9 @@ export const DEFAULT_BOWTIES: BowTieConfig[] = [
       { id: 'ma-o3', type: 'mitigating_action', label: '人员疏散', description: '全厂人员撤离', position: { x: 80, y: 80 } },
       
       // Consequences
-      { id: 'c-o1', type: 'consequence', label: '重大财产损失', description: '装置严重损毁', position: { x: 95, y: 30 } },
-      { id: 'c-o2', type: 'consequence', label: '人员伤亡', description: '可能有人员死亡', position: { x: 95, y: 55 } },
-      { id: 'c-o3', type: 'consequence', label: '环境灾害', description: '大范围环境污染', position: { x: 95, y: 80 } },
+      { id: 'c-o1', type: 'consequence', label: '重大财产损失', description: '装置严重损毁', position: { x: 95, y: 30 }, probability: 1.0e-5, severity: 'catastrophic', financialImpact: '1亿+' },
+      { id: 'c-o2', type: 'consequence', label: '人员伤亡', description: '可能有人员死亡', position: { x: 95, y: 55 }, probability: 5.0e-6, severity: 'catastrophic', financialImpact: '不可估量' },
+      { id: 'c-o3', type: 'consequence', label: '环境灾害', description: '大范围环境污染', position: { x: 95, y: 80 }, probability: 8.0e-6, severity: 'catastrophic', financialImpact: '5000万+' },
     ],
     links: [
       { from: 'hazard-o', to: 'te-overview' },
