@@ -2,6 +2,12 @@
 
 export type TagStatus = 'normal' | 'warning' | 'alarm';
 
+// Alarm priority levels (ISA-18.2 standard)
+export type AlarmPriority = 1 | 2 | 3 | 4; // 1=紧急, 2=高, 3=中, 4=低
+
+// Alarm categories
+export type AlarmCategory = 'safety' | 'equipment' | 'process' | 'quality';
+
 export interface TagPosition {
   x: number; // Percentage 0-100
   y: number; // Percentage 0-100
@@ -44,6 +50,14 @@ export interface Alarm {
   acknowledged: boolean;
   acknowledgedBy?: string;
   acknowledgedAt?: Date;
+  
+  // Priority and risk analysis fields
+  priority: AlarmPriority;           // 优先级等级 1-4
+  category: AlarmCategory;           // 报警类别
+  riskScore: number;                 // 动态风险评分 0-100
+  responseDeadline: Date;            // 建议响应截止时间
+  escalated: boolean;                // 是否已升级
+  rootCauseTagIds?: string[];        // 关联的根因标签
 }
 
 export interface OperationLog {

@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { Alarm } from '@/types/dcs';
+import React, { useState, useMemo } from 'react';
+import { Alarm, AlarmPriority } from '@/types/dcs';
 import { useAuth } from '@/contexts/AuthContext';
-import { Bell, AlertTriangle, AlertCircle, Check, Clock, User, ExternalLink } from 'lucide-react';
+import { 
+  Bell, AlertTriangle, AlertCircle, Check, Clock, User, ExternalLink, 
+  Zap, TrendingUp, Timer
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -12,6 +16,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  groupAlarmsByPriority,
+  PRIORITY_LABELS,
+  PRIORITY_COLORS,
+  formatRemainingTime,
+} from '@/services/alarmPriorityService';
 
 interface AlarmPanelProps {
   alarms: Alarm[];
@@ -19,13 +29,66 @@ interface AlarmPanelProps {
   onAlarmClick?: (tagName: string) => void;
 }
 
+const PriorityIcon: React.FC<{ priority: AlarmPriority }> = ({ priority }) => {
+  switch (priority) {
+    case 1:
+      return <Zap className="w-4 h-4 text-red-500 animate-pulse" />;
+    case 2:
+      return <AlertCircle className="w-4 h-4 text-orange-500" />;
+    case 3:
+      return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+    case 4:
+      return <Bell className="w-4 h-4 text-blue-400" />;
+  }
+};
+
+const RiskScoreBar: React.FC<{ score: number }> = ({ score }) => {
+  const getColor = () => {
+    if (score >= 80) return 'bg-red-500';
+    if (score >= 60) return 'bg-orange-500';
+    if (score >= 40) return 'bg-yellow-500';
+    return 'bg-blue-400';
+  };
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div 
+          className={cn("h-full rounded-full transition-all duration-300", getColor())}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+      <span className="text-xs text-muted-foreground w-8">{score}</span>
+    </div>
+  );
+};
+
 const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge, onAlarmClick }) => {
   const { profile, canAcknowledge } = useAuth();
   const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false);
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
-  const activeAlarms = alarms.filter((a) => !a.acknowledged);
-  const acknowledgedAlarms = alarms.filter((a) => a.acknowledged);
+  // Update current time every second for countdown
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const activeAlarms = useMemo(() => 
+    alarms.filter((a) => !a.acknowledged),
+    [alarms]
+  );
+  
+  const acknowledgedAlarms = useMemo(() => 
+    alarms.filter((a) => a.acknowledged),
+    [alarms]
+  );
+
+  const groupedAlarms = useMemo(() => 
+    groupAlarmsByPriority(activeAlarms),
+    [activeAlarms]
+  );
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('zh-CN', { 
@@ -56,6 +119,109 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge, onAlarmC
     }
   };
 
+  const renderAlarmItem = (alarm: Alarm) => {
+    const colors = PRIORITY_COLORS[alarm.priority];
+    const isOverdue = alarm.responseDeadline && currentTime > alarm.responseDeadline;
+    
+    return (
+      <div
+        key={alarm.id}
+        className={cn(
+          'p-2 rounded-md border-l-4 bg-secondary/50 cursor-pointer hover:bg-secondary/80 transition-colors',
+          colors.border,
+          alarm.priority === 1 && 'animate-pulse-alarm',
+          alarm.escalated && 'ring-1 ring-red-500/50'
+        )}
+        onClick={() => handleAlarmItemClick(alarm.tagName)}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 min-w-0 flex-1">
+            <PriorityIcon priority={alarm.priority} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-foreground truncate flex items-center gap-1">
+                  {alarm.tagName}
+                  <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                </p>
+                {alarm.escalated && (
+                  <span className="px-1 py-0.5 text-[10px] bg-red-500/20 text-red-400 rounded">
+                    已升级
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {alarm.message}
+              </p>
+              
+              {/* Risk Score Bar */}
+              <RiskScoreBar score={alarm.riskScore} />
+              
+              {/* Time and Response Deadline */}
+              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {formatTime(alarm.timestamp)}
+                </span>
+                {alarm.responseDeadline && (
+                  <span className={cn(
+                    "flex items-center gap-1",
+                    isOverdue ? "text-red-400" : "text-muted-foreground"
+                  )}>
+                    <Timer className="w-3 h-3" />
+                    {formatRemainingTime(alarm.responseDeadline, currentTime)}
+                  </span>
+                )}
+                {!alarm.escalated && alarm.riskScore > 70 && (
+                  <span className="flex items-center gap-1 text-orange-400">
+                    <TrendingUp className="w-3 h-3" />
+                    风险上升
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          {canAcknowledge() && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0 h-7 px-2 text-xs"
+              onClick={(e) => handleAcknowledgeClick(e, alarm.id)}
+            >
+              <Check className="w-3 h-3 mr-1" />
+              确认
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderPriorityGroup = (priority: AlarmPriority, alarmsInGroup: Alarm[]) => {
+    if (alarmsInGroup.length === 0) return null;
+    
+    const colors = PRIORITY_COLORS[priority];
+    const label = PRIORITY_LABELS[priority];
+    
+    return (
+      <div key={priority} className="mb-3">
+        <div className={cn(
+          "flex items-center gap-2 px-2 py-1 rounded-t-md text-xs font-medium",
+          colors.bg,
+          colors.text
+        )}>
+          <PriorityIcon priority={priority} />
+          <span>{label}优先级</span>
+          <span className="ml-auto px-1.5 py-0.5 bg-background/50 rounded text-[10px]">
+            {alarmsInGroup.length}
+          </span>
+        </div>
+        <div className="space-y-1.5 pt-1.5">
+          {alarmsInGroup.map(renderAlarmItem)}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="h-full flex flex-col">
@@ -69,53 +235,14 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge, onAlarmC
               </div>
             ) : (
               <>
-                {/* Active Alarms */}
-                {activeAlarms.map((alarm) => (
-                  <div
-                    key={alarm.id}
-                    className={cn(
-                      'p-2 rounded-md border-l-4 bg-secondary/50 cursor-pointer hover:bg-secondary/80 transition-colors',
-                      alarm.type === 'alarm' 
-                        ? 'border-l-status-alarm animate-pulse-alarm' 
-                        : 'border-l-status-warning animate-pulse-warning'
+                {/* Active Alarms by Priority */}
+                {activeAlarms.length > 0 && (
+                  <div>
+                    {([1, 2, 3, 4] as AlarmPriority[]).map(p => 
+                      renderPriorityGroup(p, groupedAlarms[p])
                     )}
-                    onClick={() => handleAlarmItemClick(alarm.tagName)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
-                        {alarm.type === 'alarm' ? (
-                          <AlertCircle className="w-4 h-4 text-status-alarm shrink-0 mt-0.5" />
-                        ) : (
-                          <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate flex items-center gap-1">
-                            {alarm.tagName}
-                            <ExternalLink className="w-3 h-3 text-muted-foreground" />
-                          </p>
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {alarm.message}
-                          </p>
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <Clock className="w-3 h-3" />
-                            {formatTime(alarm.timestamp)}
-                          </div>
-                        </div>
-                      </div>
-                      {canAcknowledge() && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="shrink-0 h-7 px-2 text-xs"
-                          onClick={(e) => handleAcknowledgeClick(e, alarm.id)}
-                        >
-                          <Check className="w-3 h-3 mr-1" />
-                          确认
-                        </Button>
-                      )}
-                    </div>
                   </div>
-                ))}
+                )}
 
                 {/* Acknowledged Alarms */}
                 {acknowledgedAlarms.length > 0 && (

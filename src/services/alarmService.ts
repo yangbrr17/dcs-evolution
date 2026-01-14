@@ -1,5 +1,24 @@
 import { supabase } from '@/integrations/supabase/client';
-import { Alarm } from '@/types/dcs';
+import { Alarm, AlarmPriority, AlarmCategory } from '@/types/dcs';
+
+// Helper to map DB row to Alarm object
+const mapRowToAlarm = (row: any): Alarm => ({
+  id: row.id,
+  tagId: row.tag_id,
+  tagName: row.tag_name,
+  message: row.message,
+  type: row.type as 'warning' | 'alarm',
+  timestamp: new Date(row.created_at),
+  acknowledged: row.acknowledged,
+  acknowledgedBy: row.acknowledged_by || undefined,
+  acknowledgedAt: row.acknowledged_at ? new Date(row.acknowledged_at) : undefined,
+  priority: (row.priority || 3) as AlarmPriority,
+  category: (row.category || 'process') as AlarmCategory,
+  riskScore: row.risk_score || 50,
+  responseDeadline: row.response_deadline ? new Date(row.response_deadline) : new Date(),
+  escalated: row.escalated || false,
+  rootCauseTagIds: row.root_cause_tag_ids || undefined,
+});
 
 // Save alarm to database (let DB generate UUID)
 export const saveAlarm = async (alarm: Alarm): Promise<string | null> => {
@@ -12,6 +31,12 @@ export const saveAlarm = async (alarm: Alarm): Promise<string | null> => {
     acknowledged: alarm.acknowledged,
     acknowledged_by: alarm.acknowledgedBy || null,
     acknowledged_at: alarm.acknowledgedAt?.toISOString() || null,
+    priority: alarm.priority,
+    category: alarm.category,
+    risk_score: alarm.riskScore,
+    response_deadline: alarm.responseDeadline.toISOString(),
+    escalated: alarm.escalated,
+    root_cause_tag_ids: alarm.rootCauseTagIds || null,
   }).select('id').single();
 
   if (error) {
@@ -27,6 +52,8 @@ export const fetchAlarms = async (limit: number = 50): Promise<Alarm[]> => {
   const { data, error } = await supabase
     .from('alarms')
     .select('*')
+    .order('priority', { ascending: true })
+    .order('risk_score', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -35,17 +62,7 @@ export const fetchAlarms = async (limit: number = 50): Promise<Alarm[]> => {
     return [];
   }
 
-  return (data || []).map((row) => ({
-    id: row.id,
-    tagId: row.tag_id,
-    tagName: row.tag_name,
-    message: row.message,
-    type: row.type as 'warning' | 'alarm',
-    timestamp: new Date(row.created_at),
-    acknowledged: row.acknowledged,
-    acknowledgedBy: row.acknowledged_by || undefined,
-    acknowledgedAt: row.acknowledged_at ? new Date(row.acknowledged_at) : undefined,
-  }));
+  return (data || []).map(mapRowToAlarm);
 };
 
 // Acknowledge alarm in database (requires operator or admin role)
@@ -89,18 +106,7 @@ export const subscribeToAlarms = (
         table: 'alarms',
       },
       (payload) => {
-        const row = payload.new as any;
-        onNewAlarm({
-          id: row.id,
-          tagId: row.tag_id,
-          tagName: row.tag_name,
-          message: row.message,
-          type: row.type as 'warning' | 'alarm',
-          timestamp: new Date(row.created_at),
-          acknowledged: row.acknowledged,
-          acknowledgedBy: row.acknowledged_by || undefined,
-          acknowledgedAt: row.acknowledged_at ? new Date(row.acknowledged_at) : undefined,
-        });
+        onNewAlarm(mapRowToAlarm(payload.new));
       }
     )
     .on(
@@ -111,18 +117,7 @@ export const subscribeToAlarms = (
         table: 'alarms',
       },
       (payload) => {
-        const row = payload.new as any;
-        onAlarmUpdate({
-          id: row.id,
-          tagId: row.tag_id,
-          tagName: row.tag_name,
-          message: row.message,
-          type: row.type as 'warning' | 'alarm',
-          timestamp: new Date(row.created_at),
-          acknowledged: row.acknowledged,
-          acknowledgedBy: row.acknowledged_by || undefined,
-          acknowledgedAt: row.acknowledged_at ? new Date(row.acknowledged_at) : undefined,
-        });
+        onAlarmUpdate(mapRowToAlarm(payload.new));
       }
     )
     .subscribe();
@@ -130,4 +125,30 @@ export const subscribeToAlarms = (
   return () => {
     supabase.removeChannel(channel);
   };
+};
+
+// Update alarm risk score and escalation status
+export const updateAlarmRisk = async (
+  alarmId: string,
+  riskScore: number,
+  escalated: boolean,
+  priority?: AlarmPriority
+): Promise<void> => {
+  const updateData: any = {
+    risk_score: riskScore,
+    escalated,
+  };
+  
+  if (priority !== undefined) {
+    updateData.priority = priority;
+  }
+
+  const { error } = await supabase
+    .from('alarms')
+    .update(updateData)
+    .eq('id', alarmId);
+
+  if (error) {
+    console.error('Failed to update alarm risk:', error);
+  }
 };
