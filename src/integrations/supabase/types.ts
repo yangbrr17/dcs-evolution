@@ -19,9 +19,15 @@ export type Database = {
           acknowledged: boolean
           acknowledged_at: string | null
           acknowledged_by: string | null
+          category: string | null
           created_at: string
+          escalated: boolean | null
           id: string
           message: string
+          priority: number | null
+          response_deadline: string | null
+          risk_score: number | null
+          root_cause_tag_ids: string[] | null
           tag_id: string
           tag_name: string
           type: string
@@ -30,9 +36,15 @@ export type Database = {
           acknowledged?: boolean
           acknowledged_at?: string | null
           acknowledged_by?: string | null
+          category?: string | null
           created_at?: string
+          escalated?: boolean | null
           id?: string
           message: string
+          priority?: number | null
+          response_deadline?: string | null
+          risk_score?: number | null
+          root_cause_tag_ids?: string[] | null
           tag_id: string
           tag_name: string
           type: string
@@ -41,9 +53,15 @@ export type Database = {
           acknowledged?: boolean
           acknowledged_at?: string | null
           acknowledged_by?: string | null
+          category?: string | null
           created_at?: string
+          escalated?: boolean | null
           id?: string
           message?: string
+          priority?: number | null
+          response_deadline?: string | null
+          risk_score?: number | null
+          root_cause_tag_ids?: string[] | null
           tag_id?: string
           tag_name?: string
           type?: string

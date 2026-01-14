@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { TagData, Alarm, ProcessArea } from '@/types/dcs';
 import { createInitialTags, updateTagData, generateAlarm } from '@/services/mockDataService';
-import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms } from '@/services/alarmService';
+import { saveAlarm, fetchAlarms, acknowledgeAlarm, subscribeToAlarms, updateAlarmRisk } from '@/services/alarmService';
+import { calculateRiskScore, checkEscalation, getEscalatedPriority } from '@/services/alarmPriorityService';
 import { logOperation } from '@/services/operationLogService';
 import { saveTagPosition, applyStoredPositions } from '@/services/tagPositionService';
 import { findCausalChain } from '@/services/causalityService';
@@ -115,6 +116,43 @@ const DCSInterface: React.FC = () => {
     );
 
     return unsubscribe;
+  }, []);
+
+  // Dynamic risk score update interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAlarms((prev) => 
+        prev.map((alarm) => {
+          if (alarm.acknowledged) return alarm;
+          
+          const newRiskScore = calculateRiskScore(alarm);
+          const shouldEscalate = checkEscalation(alarm);
+          
+          // Only update if changed
+          if (newRiskScore === alarm.riskScore && shouldEscalate === alarm.escalated) {
+            return alarm;
+          }
+          
+          const updatedAlarm = {
+            ...alarm,
+            riskScore: newRiskScore,
+            escalated: alarm.escalated || shouldEscalate,
+            priority: shouldEscalate && !alarm.escalated 
+              ? getEscalatedPriority(alarm.priority) 
+              : alarm.priority,
+          };
+          
+          // Persist escalation to database (fire and forget)
+          if (shouldEscalate && !alarm.escalated) {
+            updateAlarmRisk(alarm.id, newRiskScore, true, updatedAlarm.priority);
+          }
+          
+          return updatedAlarm;
+        })
+      );
+    }, 10000); // Every 10 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   // Ref to collect alarms during tag updates

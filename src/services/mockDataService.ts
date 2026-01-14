@@ -1,4 +1,5 @@
-import { TagData, DataPoint, TagStatus, Alarm, ProcessArea } from '@/types/dcs';
+import { TagData, DataPoint, TagStatus, Alarm, ProcessArea, AlarmPriority, AlarmCategory } from '@/types/dcs';
+import { calculatePriority, calculateRiskScore, calculateResponseDeadline, determineCategory } from './alarmPriorityService';
 
 // Generate random value within range
 const randomInRange = (min: number, max: number): number => {
@@ -357,14 +358,31 @@ export const generateAlarm = (tag: TagData, previousStatus: TagStatus): Alarm | 
   
   const isHigh = tag.currentValue > tag.setpoint;
   const limitType = isHigh ? 'High' : 'Low';
+  const isAlarmType = tag.status === 'alarm';
+  const timestamp = new Date();
   
-  return {
+  // Calculate priority based on tag data
+  const priority = calculatePriority(tag, isAlarmType);
+  const category = determineCategory(tag.id);
+  
+  const alarm: Alarm = {
     id: `alarm-${Date.now()}-${tag.id}`,
     tagId: tag.id,
     tagName: tag.name,
-    message: `${tag.description} ${limitType} ${tag.status === 'alarm' ? 'Alarm' : 'Warning'}: ${tag.currentValue}${tag.unit}`,
-    type: tag.status === 'alarm' ? 'alarm' : 'warning',
-    timestamp: new Date(),
+    message: `${tag.description} ${limitType} ${isAlarmType ? 'Alarm' : 'Warning'}: ${tag.currentValue}${tag.unit}`,
+    type: isAlarmType ? 'alarm' : 'warning',
+    timestamp,
     acknowledged: false,
+    priority,
+    category,
+    riskScore: 0, // Will be calculated
+    responseDeadline: new Date(), // Will be calculated
+    escalated: false,
   };
+  
+  // Calculate risk score and response deadline
+  alarm.riskScore = calculateRiskScore(alarm);
+  alarm.responseDeadline = calculateResponseDeadline(alarm);
+  
+  return alarm;
 };
