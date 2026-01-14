@@ -119,6 +119,19 @@ export function getFaultTreeTagIds(faultTree: FaultTreeStructure): string[] {
   return Array.from(tagIds);
 }
 
+// 查找包含指定tagId的故障树
+export function findFaultTreeByTagId(tagId: string, areaId?: string): FaultTreeStructure | undefined {
+  const trees = areaId ? getFaultTreesForArea(areaId) : currentFaultTrees;
+  
+  for (const tree of trees) {
+    if (tree.topEventTagId === tagId) return tree;
+    for (const link of tree.links) {
+      if (link.from === tagId || link.to === tagId) return tree;
+    }
+  }
+  return undefined;
+}
+
 // 重置为默认配置
 export function resetFaultTrees(): void {
   currentFaultTrees = [...DEFAULT_FAULT_TREES];

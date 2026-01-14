@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alarm } from '@/types/dcs';
 import { useAuth } from '@/contexts/AuthContext';
-import { Bell, AlertTriangle, AlertCircle, Check, Clock, User } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, Check, Clock, User, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -16,9 +16,10 @@ import {
 interface AlarmPanelProps {
   alarms: Alarm[];
   onAcknowledge: (alarmId: string, acknowledgedBy: string) => void;
+  onAlarmClick?: (tagName: string) => void;
 }
 
-const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
+const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge, onAlarmClick }) => {
   const { profile, canAcknowledge } = useAuth();
   const [acknowledgeDialogOpen, setAcknowledgeDialogOpen] = useState(false);
   const [selectedAlarmId, setSelectedAlarmId] = useState<string | null>(null);
@@ -34,7 +35,8 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
     });
   };
 
-  const handleAcknowledgeClick = (alarmId: string) => {
+  const handleAcknowledgeClick = (e: React.MouseEvent, alarmId: string) => {
+    e.stopPropagation();
     if (!canAcknowledge()) return;
     setSelectedAlarmId(alarmId);
     setAcknowledgeDialogOpen(true);
@@ -45,6 +47,12 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
       onAcknowledge(selectedAlarmId, profile.name);
       setAcknowledgeDialogOpen(false);
       setSelectedAlarmId(null);
+    }
+  };
+
+  const handleAlarmItemClick = (tagName: string) => {
+    if (onAlarmClick) {
+      onAlarmClick(tagName);
     }
   };
 
@@ -66,11 +74,12 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
                   <div
                     key={alarm.id}
                     className={cn(
-                      'p-2 rounded-md border-l-4 bg-secondary/50',
+                      'p-2 rounded-md border-l-4 bg-secondary/50 cursor-pointer hover:bg-secondary/80 transition-colors',
                       alarm.type === 'alarm' 
                         ? 'border-l-status-alarm animate-pulse-alarm' 
                         : 'border-l-status-warning animate-pulse-warning'
                     )}
+                    onClick={() => handleAlarmItemClick(alarm.tagName)}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 min-w-0">
@@ -80,8 +89,9 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
                           <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
+                          <p className="text-sm font-medium text-foreground truncate flex items-center gap-1">
                             {alarm.tagName}
+                            <ExternalLink className="w-3 h-3 text-muted-foreground" />
                           </p>
                           <p className="text-xs text-muted-foreground line-clamp-2">
                             {alarm.message}
@@ -97,7 +107,7 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
                           size="sm"
                           variant="ghost"
                           className="shrink-0 h-7 px-2 text-xs"
-                          onClick={() => handleAcknowledgeClick(alarm.id)}
+                          onClick={(e) => handleAcknowledgeClick(e, alarm.id)}
                         >
                           <Check className="w-3 h-3 mr-1" />
                           确认
@@ -116,7 +126,8 @@ const AlarmPanel: React.FC<AlarmPanelProps> = ({ alarms, onAcknowledge }) => {
                     {acknowledgedAlarms.slice(0, 5).map((alarm) => (
                       <div
                         key={alarm.id}
-                        className="p-2 rounded-md bg-secondary/30 opacity-60"
+                        className="p-2 rounded-md bg-secondary/30 opacity-60 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => handleAlarmItemClick(alarm.tagName)}
                       >
                         <div className="flex items-start gap-2">
                           <Check className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />

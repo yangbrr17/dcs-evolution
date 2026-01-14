@@ -19,6 +19,7 @@ import UserMenu from './UserMenu';
 import ShiftHandover from './ShiftHandover';
 import OperationLogPanel from './OperationLogPanel';
 import SafetyAnalysisPanel from './SafetyAnalysisPanel';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, Play, Pause, Bell, Clock } from 'lucide-react';
@@ -35,6 +36,11 @@ const DCSInterface: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<TagData | null>(null);
   const [showShiftHandover, setShowShiftHandover] = useState(false);
   const [hoveredAlarmTagId, setHoveredAlarmTagId] = useState<string | null>(null);
+  
+  // Safety analysis panel state
+  const [safetyPanelExpanded, setSafetyPanelExpanded] = useState(false);
+  const [safetyPanelTab, setSafetyPanelTab] = useState<'fault-tree' | 'bow-tie'>('fault-tree');
+  const [targetFaultTreeTagId, setTargetFaultTreeTagId] = useState<string | null>(null);
 
   // Get highlighted tag IDs for causal chain visualization
   const highlightedTagIds = useMemo(() => {
@@ -208,6 +214,13 @@ const DCSInterface: React.FC = () => {
     }
   }, [user, profile, role, alarms, currentAreaId]);
 
+  // Handle alarm click - navigate to fault tree
+  const handleAlarmClick = useCallback((tagName: string) => {
+    setTargetFaultTreeTagId(tagName);
+    setSafetyPanelExpanded(true);
+    setSafetyPanelTab('fault-tree');
+  }, []);
+
   const handleImageUpload = useCallback(async (file: File) => {
     const url = await uploadProcessImage(currentAreaId, file);
     if (url) {
@@ -366,44 +379,57 @@ const DCSInterface: React.FC = () => {
               if (tag) setSelectedTag(tag);
             }}
             onHoveredAlarmTagChange={setHoveredAlarmTagId}
+            isExpanded={safetyPanelExpanded}
+            onExpandedChange={setSafetyPanelExpanded}
+            activeTab={safetyPanelTab}
+            onActiveTabChange={(tab) => setSafetyPanelTab(tab as 'fault-tree' | 'bow-tie')}
+            targetTagId={targetFaultTreeTagId}
           />
         </div>
 
-        {/* Right Sidebar */}
+        {/* Right Sidebar with Resizable Panels */}
         <div className="w-80 border-l border-border flex flex-col">
-          <div className="flex-1 overflow-hidden">
-            <MonitoringPanel tags={currentTags} onTagClick={setSelectedTag} />
-          </div>
-          
-          {/* Tabs for Alarms and Operation Logs */}
-          <div className="h-80 border-t border-border">
-            <Tabs defaultValue="alarms" className="h-full flex flex-col">
-              <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
-                <TabsTrigger value="alarms" className="gap-1 text-xs">
-                  <Bell className="w-3 h-3" />
-                  报警
-                  {activeAlarms.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-status-alarm/20 text-status-alarm rounded">
-                      {activeAlarms.length}
-                    </span>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="logs" className="gap-1 text-xs">
-                  <Clock className="w-3 h-3" />
-                  操作日志
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="alarms" className="flex-1 m-0 overflow-hidden">
-                <AlarmPanel 
-                  alarms={alarms} 
-                  onAcknowledge={handleAcknowledgeAlarm}
-                />
-              </TabsContent>
-              <TabsContent value="logs" className="flex-1 m-0 overflow-hidden p-2">
-                <OperationLogPanel />
-              </TabsContent>
-            </Tabs>
-          </div>
+          <ResizablePanelGroup direction="vertical" className="flex-1">
+            {/* Monitoring Panel */}
+            <ResizablePanel defaultSize={55} minSize={25}>
+              <div className="h-full overflow-hidden">
+                <MonitoringPanel tags={currentTags} onTagClick={setSelectedTag} />
+              </div>
+            </ResizablePanel>
+            
+            <ResizableHandle withHandle />
+            
+            {/* Alarms and Logs Panel */}
+            <ResizablePanel defaultSize={45} minSize={20}>
+              <Tabs defaultValue="alarms" className="h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-2 rounded-none border-b shrink-0">
+                  <TabsTrigger value="alarms" className="gap-1 text-xs">
+                    <Bell className="w-3 h-3" />
+                    报警
+                    {activeAlarms.length > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-status-alarm/20 text-status-alarm rounded">
+                        {activeAlarms.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="logs" className="gap-1 text-xs">
+                    <Clock className="w-3 h-3" />
+                    操作日志
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="alarms" className="flex-1 m-0 overflow-hidden">
+                  <AlarmPanel 
+                    alarms={alarms} 
+                    onAcknowledge={handleAcknowledgeAlarm}
+                    onAlarmClick={handleAlarmClick}
+                  />
+                </TabsContent>
+                <TabsContent value="logs" className="flex-1 m-0 overflow-hidden p-2">
+                  <OperationLogPanel />
+                </TabsContent>
+              </Tabs>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
       </div>
 
