@@ -111,13 +111,21 @@ export interface FaultTreeStructure {
   links: FaultTreeLink[];  // 因果链接列表
 }
 
-// Bow-Tie types
-export type BowTieEventType = 'threat' | 'barrier' | 'top_event' | 'recovery' | 'consequence';
+// Bow-Tie types - Industrial style matching reference diagram
+export type BowTieEventType = 
+  | 'hazard'            // 顶部危害框（黄黑条纹）
+  | 'threat'            // 左侧威胁来源（蓝色边框）
+  | 'preventive_action' // 预防措施（白色卡片）
+  | 'barrier'           // 屏障（3D圆柱）
+  | 'top_event'         // 中心起始事件（橙色圆形）
+  | 'mitigating_action' // 缓解措施（白色卡片）
+  | 'consequence';      // 右侧后果（红色边框）
 
 export interface BowTieEvent {
   id: string;
   type: BowTieEventType;
   label: string;
+  description?: string;  // 详细描述
   tagId?: string;
   position: { x: number; y: number };
 }

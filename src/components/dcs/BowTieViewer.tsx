@@ -1,7 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { BowTieConfig, BowTieEvent, TagData } from '@/types/dcs';
-import { ZoomIn, ZoomOut, RotateCcw, Move } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useMemo, useCallback } from 'react';
+import { BowTieConfig, BowTieEvent, TagData, TagStatus } from '@/types/dcs';
 
 interface BowTieViewerProps {
   bowTie: BowTieConfig;
@@ -10,308 +8,372 @@ interface BowTieViewerProps {
   onHoveredTagChange?: (tagId: string | null) => void;
 }
 
-const getEventColors = (type: BowTieEvent['type'], status: 'normal' | 'warning' | 'alarm') => {
-  // Status overrides for alarm/warning states
-  if (status === 'alarm') {
-    return {
-      bg: 'hsl(var(--destructive))',
-      border: 'hsl(var(--destructive))',
-      glow: 'hsl(var(--destructive) / 0.4)',
-      text: 'hsl(var(--destructive-foreground))',
-    };
-  }
-  if (status === 'warning') {
-    return {
-      bg: 'hsl(45 100% 50%)',
-      border: 'hsl(45 100% 40%)',
-      glow: 'hsl(45 100% 50% / 0.4)',
-      text: 'hsl(0 0% 10%)',
-    };
-  }
+// SVG Definitions for patterns and gradients
+const SvgDefs: React.FC = () => (
+  <defs>
+    {/* Hazard yellow-black stripes pattern */}
+    <pattern id="hazard-stripes" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(45)">
+      <rect width="6" height="12" fill="#FFD60A" />
+      <rect x="6" width="6" height="12" fill="#1a1a1a" />
+    </pattern>
+    
+    {/* Top event orange gradient */}
+    <radialGradient id="top-event-gradient" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stopColor="#FF8C42" />
+      <stop offset="50%" stopColor="#E85D04" />
+      <stop offset="100%" stopColor="#DC2F02" />
+    </radialGradient>
+    
+    {/* Barrier cylinder gradient */}
+    <linearGradient id="barrier-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stopColor="#4a4a4a" />
+      <stop offset="30%" stopColor="#6a6a6a" />
+      <stop offset="50%" stopColor="#7a7a7a" />
+      <stop offset="70%" stopColor="#6a6a6a" />
+      <stop offset="100%" stopColor="#3a3a3a" />
+    </linearGradient>
+    
+    {/* Barrier top ellipse gradient */}
+    <radialGradient id="barrier-top-gradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stopColor="#8a8a8a" />
+      <stop offset="100%" stopColor="#5a5a5a" />
+    </radialGradient>
+    
+    {/* Threat box gradient */}
+    <linearGradient id="threat-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#E3F2FD" />
+      <stop offset="100%" stopColor="#BBDEFB" />
+    </linearGradient>
+    
+    {/* Consequence box gradient */}
+    <linearGradient id="consequence-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#FFEBEE" />
+      <stop offset="100%" stopColor="#FFCDD2" />
+    </linearGradient>
+    
+    {/* Action card gradient */}
+    <linearGradient id="action-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#FAFAFA" />
+      <stop offset="100%" stopColor="#F5F5F5" />
+    </linearGradient>
+    
+    {/* Glow filters */}
+    <filter id="glow-warning" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feFlood floodColor="#F59E0B" floodOpacity="0.6" />
+      <feComposite in2="blur" operator="in" />
+      <feMerge>
+        <feMergeNode />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    
+    <filter id="glow-alarm" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feFlood floodColor="#EF4444" floodOpacity="0.7" />
+      <feComposite in2="blur" operator="in" />
+      <feMerge>
+        <feMergeNode />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    
+    {/* Drop shadow */}
+    <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="1" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.15" />
+    </filter>
+    
+    {/* Arrow marker */}
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9CA3AF" />
+    </marker>
+  </defs>
+);
+
+// Hazard box component (yellow-black stripes)
+const HazardBox: React.FC<{
+  event: BowTieEvent;
+  x: number;
+  y: number;
+  isHovered: boolean;
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ event, x, y, isHovered, onClick, onHover }) => {
+  const width = 140;
+  const height = 50;
+  const padding = 6;
   
-  // Default colors by type
-  switch (type) {
-    case 'threat':
-      return {
-        bg: 'hsl(210 80% 55%)',
-        border: 'hsl(210 80% 40%)',
-        glow: 'hsl(210 80% 55% / 0.3)',
-        text: 'hsl(0 0% 100%)',
-      };
-    case 'barrier':
-      return {
-        bg: 'hsl(160 60% 45%)',
-        border: 'hsl(160 60% 35%)',
-        glow: 'hsl(160 60% 45% / 0.3)',
-        text: 'hsl(0 0% 100%)',
-      };
-    case 'top_event':
-      return {
-        bg: 'hsl(350 80% 50%)',
-        border: 'hsl(350 80% 40%)',
-        glow: 'hsl(350 80% 50% / 0.5)',
-        text: 'hsl(0 0% 100%)',
-      };
-    case 'recovery':
-      return {
-        bg: 'hsl(45 85% 55%)',
-        border: 'hsl(45 85% 45%)',
-        glow: 'hsl(45 85% 55% / 0.3)',
-        text: 'hsl(0 0% 10%)',
-      };
-    case 'consequence':
-      return {
-        bg: 'hsl(280 60% 55%)',
-        border: 'hsl(280 60% 45%)',
-        glow: 'hsl(280 60% 55% / 0.3)',
-        text: 'hsl(0 0% 100%)',
-      };
-    default:
-      return {
-        bg: 'hsl(var(--muted))',
-        border: 'hsl(var(--border))',
-        glow: 'transparent',
-        text: 'hsl(var(--muted-foreground))',
-      };
-  }
+  return (
+    <g
+      transform={`translate(${x - width / 2}, ${y - height / 2})`}
+      onClick={onClick}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      style={{ cursor: 'pointer' }}
+    >
+      {/* Outer striped border */}
+      <rect
+        width={width}
+        height={height}
+        fill="url(#hazard-stripes)"
+        rx={4}
+        filter={isHovered ? "url(#drop-shadow)" : undefined}
+      />
+      {/* Inner white background */}
+      <rect
+        x={padding}
+        y={padding}
+        width={width - padding * 2}
+        height={height - padding * 2}
+        fill="white"
+        rx={2}
+      />
+      {/* Label */}
+      <text
+        x={width / 2}
+        y={height / 2 - 4}
+        textAnchor="middle"
+        fill="#1a1a1a"
+        fontSize="11"
+        fontWeight="600"
+      >
+        {event.label}
+      </text>
+      {event.description && (
+        <text
+          x={width / 2}
+          y={height / 2 + 10}
+          textAnchor="middle"
+          fill="#666"
+          fontSize="8"
+        >
+          {event.description}
+        </text>
+      )}
+    </g>
+  );
 };
 
-const EventNode: React.FC<{
+// Top Event (initiating event) - orange circle with label
+const TopEventCircle: React.FC<{
   event: BowTieEvent;
-  status: 'normal' | 'warning' | 'alarm';
+  x: number;
+  y: number;
+  status: TagStatus;
   isHovered: boolean;
-  onClick?: () => void;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
-}> = ({ event, status, isHovered, onClick, onMouseEnter, onMouseLeave }) => {
-  const colors = getEventColors(event.type, status);
-  const isTopEvent = event.type === 'top_event';
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ event, x, y, status, isHovered, onClick, onHover }) => {
+  const radius = 40;
   
-  // Define sizes based on event type
-  const baseSize = isTopEvent ? 10 : 6;
-  const scale = isHovered ? 1.15 : 1;
-  const size = baseSize * scale;
-  
-  const renderShape = () => {
-    switch (event.type) {
-      case 'threat':
-        // Diamond shape with gradient
-        return (
-          <>
-            <defs>
-              <linearGradient id={`grad-${event.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor={colors.bg} />
-                <stop offset="100%" stopColor={colors.border} />
-              </linearGradient>
-              <filter id={`glow-${event.id}`}>
-                <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            <polygon
-              points={`${event.position.x},${event.position.y - size} 
-                       ${event.position.x + size},${event.position.y} 
-                       ${event.position.x},${event.position.y + size} 
-                       ${event.position.x - size},${event.position.y}`}
-              fill={`url(#grad-${event.id})`}
-              stroke={colors.border}
-              strokeWidth="0.4"
-              filter={isHovered || status !== 'normal' ? `url(#glow-${event.id})` : undefined}
-              style={{ transition: 'all 0.2s ease' }}
-            />
-          </>
-        );
-        
-      case 'barrier':
-        // Vertical rectangle (shield-like)
-        return (
-          <>
-            <defs>
-              <linearGradient id={`grad-${event.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor={colors.bg} />
-                <stop offset="100%" stopColor={colors.border} />
-              </linearGradient>
-            </defs>
-            <rect
-              x={event.position.x - size * 0.5}
-              y={event.position.y - size * 1.2}
-              width={size}
-              height={size * 2.4}
-              fill={`url(#grad-${event.id})`}
-              stroke={colors.border}
-              strokeWidth="0.4"
-              rx="1.5"
-              style={{ transition: 'all 0.2s ease' }}
-            />
-            {/* Shield icon */}
-            <path
-              d={`M${event.position.x - size * 0.25},${event.position.y - size * 0.4} 
-                  L${event.position.x},${event.position.y - size * 0.7} 
-                  L${event.position.x + size * 0.25},${event.position.y - size * 0.4} 
-                  L${event.position.x + size * 0.25},${event.position.y + size * 0.2} 
-                  Q${event.position.x},${event.position.y + size * 0.6} ${event.position.x - size * 0.25},${event.position.y + size * 0.2} Z`}
-              fill="none"
-              stroke={colors.text}
-              strokeWidth="0.3"
-              opacity="0.6"
-            />
-          </>
-        );
-        
-      case 'top_event':
-        // Prominent hexagon with glow effect
-        const hexPoints = [];
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i - Math.PI / 2;
-          hexPoints.push(
-            `${event.position.x + size * Math.cos(angle)},${event.position.y + size * Math.sin(angle)}`
-          );
-        }
-        return (
-          <>
-            <defs>
-              <radialGradient id={`grad-${event.id}`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={colors.bg} />
-                <stop offset="100%" stopColor={colors.border} />
-              </radialGradient>
-              <filter id={`glow-${event.id}`}>
-                <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            {/* Outer glow ring */}
-            {(status !== 'normal' || isHovered) && (
-              <polygon
-                points={hexPoints.map((p, i) => {
-                  const angle = (Math.PI / 3) * i - Math.PI / 2;
-                  return `${event.position.x + (size + 2) * Math.cos(angle)},${event.position.y + (size + 2) * Math.sin(angle)}`;
-                }).join(' ')}
-                fill="none"
-                stroke={colors.glow}
-                strokeWidth="1"
-                className={status !== 'normal' ? 'animate-pulse' : ''}
-              />
-            )}
-            <polygon
-              points={hexPoints.join(' ')}
-              fill={`url(#grad-${event.id})`}
-              stroke={colors.border}
-              strokeWidth="0.5"
-              filter={`url(#glow-${event.id})`}
-              style={{ transition: 'all 0.2s ease' }}
-            />
-            {/* Warning icon inside */}
-            <text
-              x={event.position.x}
-              y={event.position.y + 1.2}
-              textAnchor="middle"
-              fontSize="5"
-              fill={colors.text}
-              fontWeight="bold"
-            >
-              !
-            </text>
-          </>
-        );
-        
-      case 'recovery':
-        // Rounded rectangle with arrow
-        return (
-          <>
-            <defs>
-              <linearGradient id={`grad-${event.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor={colors.border} />
-                <stop offset="100%" stopColor={colors.bg} />
-              </linearGradient>
-            </defs>
-            <rect
-              x={event.position.x - size * 1.3}
-              y={event.position.y - size * 0.6}
-              width={size * 2.6}
-              height={size * 1.2}
-              fill={`url(#grad-${event.id})`}
-              stroke={colors.border}
-              strokeWidth="0.4"
-              rx="2"
-              style={{ transition: 'all 0.2s ease' }}
-            />
-            {/* Arrow icon */}
-            <path
-              d={`M${event.position.x + size * 0.6},${event.position.y} 
-                  L${event.position.x + size},${event.position.y} 
-                  M${event.position.x + size * 0.7},${event.position.y - size * 0.25} 
-                  L${event.position.x + size},${event.position.y} 
-                  L${event.position.x + size * 0.7},${event.position.y + size * 0.25}`}
-              fill="none"
-              stroke={colors.text}
-              strokeWidth="0.4"
-              opacity="0.7"
-            />
-          </>
-        );
-        
-      case 'consequence':
-        // Triangle pointing down
-        return (
-          <>
-            <defs>
-              <linearGradient id={`grad-${event.id}`} x1="50%" y1="0%" x2="50%" y2="100%">
-                <stop offset="0%" stopColor={colors.bg} />
-                <stop offset="100%" stopColor={colors.border} />
-              </linearGradient>
-            </defs>
-            <polygon
-              points={`${event.position.x},${event.position.y - size * 0.8} 
-                       ${event.position.x + size * 1.1},${event.position.y + size * 0.7} 
-                       ${event.position.x - size * 1.1},${event.position.y + size * 0.7}`}
-              fill={`url(#grad-${event.id})`}
-              stroke={colors.border}
-              strokeWidth="0.4"
-              style={{ transition: 'all 0.2s ease' }}
-            />
-          </>
-        );
-        
-      default:
-        return (
-          <circle
-            cx={event.position.x}
-            cy={event.position.y}
-            r={size}
-            fill={colors.bg}
-            stroke={colors.border}
-            strokeWidth="0.3"
-          />
-        );
-    }
+  const getFilter = () => {
+    if (status === 'alarm') return 'url(#glow-alarm)';
+    if (status === 'warning') return 'url(#glow-warning)';
+    return isHovered ? 'url(#drop-shadow)' : undefined;
   };
   
   return (
     <g
-      className={`${event.tagId ? 'cursor-pointer' : ''} transition-all duration-200`}
+      transform={`translate(${x}, ${y})`}
       onClick={onClick}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      style={{ opacity: isHovered ? 1 : 0.95 }}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      style={{ cursor: 'pointer' }}
     >
-      {renderShape()}
+      {/* Main circle */}
+      <circle
+        r={radius}
+        fill="url(#top-event-gradient)"
+        stroke={status === 'alarm' ? '#DC2626' : status === 'warning' ? '#F59E0B' : '#C2410C'}
+        strokeWidth={status !== 'normal' ? 3 : 2}
+        filter={getFilter()}
+      />
+      
+      {/* Label box above */}
+      <rect
+        x={-55}
+        y={-radius - 35}
+        width={110}
+        height={28}
+        fill="white"
+        stroke="#9CA3AF"
+        strokeWidth={1}
+        rx={3}
+        filter="url(#drop-shadow)"
+      />
+      <text
+        x={0}
+        y={-radius - 17}
+        textAnchor="middle"
+        fill="#1a1a1a"
+        fontSize="10"
+        fontWeight="600"
+      >
+        {event.label}
+      </text>
+      
+      {/* Event number in circle */}
+      <text
+        y={5}
+        textAnchor="middle"
+        fill="white"
+        fontSize="11"
+        fontWeight="bold"
+      >
+        起始事件
+      </text>
+    </g>
+  );
+};
+
+// Barrier component - 3D cylinder
+const BarrierCylinder: React.FC<{
+  event: BowTieEvent;
+  x: number;
+  y: number;
+  status: TagStatus;
+  isHovered: boolean;
+  isLeft: boolean;
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ event, x, y, status, isHovered, isLeft, onClick, onHover }) => {
+  const width = 24;
+  const height = 60;
+  const ellipseRy = 8;
+  
+  const getFilter = () => {
+    if (status === 'alarm') return 'url(#glow-alarm)';
+    if (status === 'warning') return 'url(#glow-warning)';
+    return isHovered ? 'url(#drop-shadow)' : undefined;
+  };
+  
+  return (
+    <g
+      transform={`translate(${x}, ${y})`}
+      onClick={onClick}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      style={{ cursor: 'pointer' }}
+      filter={getFilter()}
+    >
+      {/* Cylinder body */}
+      <rect
+        x={-width / 2}
+        y={-height / 2 + ellipseRy}
+        width={width}
+        height={height - ellipseRy * 2}
+        fill="url(#barrier-gradient)"
+      />
+      
+      {/* Bottom ellipse */}
+      <ellipse
+        cx={0}
+        cy={height / 2 - ellipseRy}
+        rx={width / 2}
+        ry={ellipseRy}
+        fill="#3a3a3a"
+      />
+      
+      {/* Top ellipse */}
+      <ellipse
+        cx={0}
+        cy={-height / 2 + ellipseRy}
+        rx={width / 2}
+        ry={ellipseRy}
+        fill="url(#barrier-top-gradient)"
+        stroke="#5a5a5a"
+        strokeWidth={1}
+      />
+      
+      {/* Connection points */}
+      <circle cx={isLeft ? -width / 2 - 4 : width / 2 + 4} cy={0} r={3} fill="white" stroke="#9CA3AF" strokeWidth={1} />
+      <circle cx={isLeft ? width / 2 + 4 : -width / 2 - 4} cy={0} r={3} fill="white" stroke="#9CA3AF" strokeWidth={1} />
+      
+      {/* Label below */}
+      <text
+        x={0}
+        y={height / 2 + 14}
+        textAnchor="middle"
+        fill="#374151"
+        fontSize="9"
+        fontWeight="500"
+      >
+        {event.label}
+      </text>
+    </g>
+  );
+};
+
+// Threat box - blue border with left accent
+const ThreatBox: React.FC<{
+  event: BowTieEvent;
+  x: number;
+  y: number;
+  status: TagStatus;
+  isHovered: boolean;
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ event, x, y, status, isHovered, onClick, onHover }) => {
+  const width = 100;
+  const height = 48;
+  const accentWidth = 5;
+  
+  const getFilter = () => {
+    if (status === 'alarm') return 'url(#glow-alarm)';
+    if (status === 'warning') return 'url(#glow-warning)';
+    return isHovered ? 'url(#drop-shadow)' : undefined;
+  };
+  
+  const getBorderColor = () => {
+    if (status === 'alarm') return '#DC2626';
+    if (status === 'warning') return '#F59E0B';
+    return '#1E88E5';
+  };
+  
+  return (
+    <g
+      transform={`translate(${x - width / 2}, ${y - height / 2})`}
+      onClick={onClick}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      style={{ cursor: 'pointer' }}
+      filter={getFilter()}
+    >
+      {/* Main box */}
+      <rect
+        width={width}
+        height={height}
+        fill="url(#threat-gradient)"
+        stroke={getBorderColor()}
+        strokeWidth={1.5}
+        rx={4}
+      />
+      
+      {/* Left accent bar */}
+      <rect
+        x={0}
+        y={0}
+        width={accentWidth}
+        height={height}
+        fill="#1565C0"
+        rx={4}
+      />
+      <rect
+        x={accentWidth}
+        y={0}
+        width={2}
+        height={height}
+        fill="#1565C0"
+      />
       
       {/* Label */}
       <text
-        x={event.position.x}
-        y={event.position.y + (isTopEvent ? size + 4 : size + 3)}
+        x={width / 2 + accentWidth / 2}
+        y={height / 2 - 4}
         textAnchor="middle"
-        fontSize={isTopEvent ? "2.8" : "2.2"}
-        fontWeight={isTopEvent ? "600" : "500"}
-        fill="hsl(var(--foreground))"
-        className="pointer-events-none"
-        style={{ textShadow: '0 1px 2px hsl(var(--background))' }}
+        fill="#1a1a1a"
+        fontSize="10"
+        fontWeight="500"
       >
         {event.label}
       </text>
@@ -319,21 +381,139 @@ const EventNode: React.FC<{
       {/* Tag indicator */}
       {event.tagId && (
         <text
-          x={event.position.x}
-          y={event.position.y + (isTopEvent ? size + 6.5 : size + 5.2)}
+          x={width / 2 + accentWidth / 2}
+          y={height / 2 + 10}
           textAnchor="middle"
-          fontSize="1.6"
-          fill="hsl(var(--primary))"
-          className="pointer-events-none"
-          fontWeight="500"
+          fill="#666"
+          fontSize="8"
         >
-          📍{event.tagId}
+          [{event.tagId}]
         </text>
       )}
     </g>
   );
 };
 
+// Consequence box - red border with right accent
+const ConsequenceBox: React.FC<{
+  event: BowTieEvent;
+  x: number;
+  y: number;
+  isHovered: boolean;
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ event, x, y, isHovered, onClick, onHover }) => {
+  const width = 100;
+  const height = 48;
+  const accentWidth = 5;
+  
+  return (
+    <g
+      transform={`translate(${x - width / 2}, ${y - height / 2})`}
+      onClick={onClick}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      style={{ cursor: 'pointer' }}
+      filter={isHovered ? 'url(#drop-shadow)' : undefined}
+    >
+      {/* Main box */}
+      <rect
+        width={width}
+        height={height}
+        fill="url(#consequence-gradient)"
+        stroke="#EF5350"
+        strokeWidth={1.5}
+        rx={4}
+      />
+      
+      {/* Right accent bar */}
+      <rect
+        x={width - accentWidth}
+        y={0}
+        width={accentWidth}
+        height={height}
+        fill="#C62828"
+        rx={4}
+      />
+      <rect
+        x={width - accentWidth - 2}
+        y={0}
+        width={2}
+        height={height}
+        fill="#C62828"
+      />
+      
+      {/* Label */}
+      <text
+        x={width / 2 - accentWidth / 2}
+        y={height / 2 + 4}
+        textAnchor="middle"
+        fill="#1a1a1a"
+        fontSize="10"
+        fontWeight="500"
+      >
+        {event.label}
+      </text>
+    </g>
+  );
+};
+
+// Action card - white rounded rectangle
+const ActionCard: React.FC<{
+  event: BowTieEvent;
+  x: number;
+  y: number;
+  isPreventive: boolean;
+  isHovered: boolean;
+  onClick: () => void;
+  onHover: (hovered: boolean) => void;
+}> = ({ event, x, y, isPreventive, isHovered, onClick, onHover }) => {
+  const width = 85;
+  const height = 40;
+  
+  return (
+    <g
+      transform={`translate(${x - width / 2}, ${y - height / 2})`}
+      onClick={onClick}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      style={{ cursor: 'pointer' }}
+      filter={isHovered ? 'url(#drop-shadow)' : undefined}
+    >
+      {/* Card background */}
+      <rect
+        width={width}
+        height={height}
+        fill="url(#action-gradient)"
+        stroke="#D1D5DB"
+        strokeWidth={1}
+        rx={6}
+      />
+      
+      {/* Color indicator dot */}
+      <circle
+        cx={12}
+        cy={height / 2}
+        r={4}
+        fill={isPreventive ? '#22C55E' : '#3B82F6'}
+      />
+      
+      {/* Label */}
+      <text
+        x={width / 2 + 6}
+        y={height / 2 + 4}
+        textAnchor="middle"
+        fill="#374151"
+        fontSize="9"
+        fontWeight="500"
+      >
+        {event.label}
+      </text>
+    </g>
+  );
+};
+
+// Main BowTieViewer component
 export const BowTieViewer: React.FC<BowTieViewerProps> = ({
   bowTie,
   tags,
@@ -341,283 +521,246 @@ export const BowTieViewer: React.FC<BowTieViewerProps> = ({
   onHoveredTagChange,
 }) => {
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
-  const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: 100, height: 100 });
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: 800, height: 500 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  
+
+  // Create tag lookup map
   const tagMap = useMemo(() => {
     const map = new Map<string, TagData>();
-    tags.forEach(t => map.set(t.id, t));
+    tags.forEach(tag => map.set(tag.id, tag));
     return map;
   }, [tags]);
-  
-  const eventMap = useMemo(() => {
-    const map = new Map<string, BowTieEvent>();
-    bowTie.events.forEach(e => map.set(e.id, e));
-    return map;
-  }, [bowTie]);
-  
-  const getEventStatus = (event: BowTieEvent): 'normal' | 'warning' | 'alarm' => {
+
+  // Get event status from associated tag
+  const getEventStatus = useCallback((event: BowTieEvent): TagStatus => {
+    if (!event.tagId) return 'normal';
+    const tag = tagMap.get(event.tagId);
+    return tag?.status || 'normal';
+  }, [tagMap]);
+
+  // Event handlers
+  const handleEventClick = useCallback((event: BowTieEvent) => {
+    onEventClick?.(event);
+  }, [onEventClick]);
+
+  const handleEventHover = useCallback((event: BowTieEvent, hovered: boolean) => {
+    setHoveredEventId(hovered ? event.id : null);
     if (event.tagId) {
-      const tag = tagMap.get(event.tagId);
-      if (tag) return tag.status;
+      onHoveredTagChange?.(hovered ? event.tagId : null);
     }
-    return 'normal';
-  };
-  
-  const handleEventClick = (event: BowTieEvent) => {
-    if (event.tagId && onEventClick) {
-      onEventClick(event);
-    }
-  };
-  
-  const handleEventHover = (event: BowTieEvent | null) => {
-    setHoveredEventId(event?.id || null);
-    if (onHoveredTagChange) {
-      onHoveredTagChange(event?.tagId || null);
-    }
-  };
-  
-  // Pan/Zoom handlers
-  const handleWheel = (e: React.WheelEvent) => {
+  }, [onHoveredTagChange]);
+
+  // Pan/zoom handlers
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
-    const newWidth = Math.max(30, Math.min(200, viewBox.width * zoomFactor));
-    const newHeight = Math.max(30, Math.min(200, viewBox.height * zoomFactor));
-    
-    const widthDiff = newWidth - viewBox.width;
-    const heightDiff = newHeight - viewBox.height;
-    
-    setViewBox({
-      x: viewBox.x - widthDiff / 2,
-      y: viewBox.y - heightDiff / 2,
-      width: newWidth,
-      height: newHeight,
-    });
-  };
-  
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0) {
-      setIsDragging(true);
-      setDragStart({ x: e.clientX, y: e.clientY });
-    }
-  };
-  
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    const dx = (e.clientX - dragStart.x) * (viewBox.width / 400);
-    const dy = (e.clientY - dragStart.y) * (viewBox.height / 300);
-    setViewBox({
-      ...viewBox,
-      x: viewBox.x - dx,
-      y: viewBox.y - dy,
-    });
+    const scale = e.deltaY > 0 ? 1.1 : 0.9;
+    setViewBox(prev => ({
+      ...prev,
+      width: Math.min(Math.max(prev.width * scale, 400), 1600),
+      height: Math.min(Math.max(prev.height * scale, 250), 1000),
+    }));
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
-  };
-  
-  const handleMouseUp = () => setIsDragging(false);
-  
-  const resetView = () => setViewBox({ x: 0, y: 0, width: 100, height: 100 });
-  const zoomIn = () => {
-    const newWidth = Math.max(30, viewBox.width * 0.85);
-    const newHeight = Math.max(30, viewBox.height * 0.85);
-    setViewBox({
-      x: viewBox.x + (viewBox.width - newWidth) / 2,
-      y: viewBox.y + (viewBox.height - newHeight) / 2,
-      width: newWidth,
-      height: newHeight,
-    });
-  };
-  const zoomOut = () => {
-    const newWidth = Math.min(200, viewBox.width * 1.15);
-    const newHeight = Math.min(200, viewBox.height * 1.15);
-    setViewBox({
-      x: viewBox.x - (newWidth - viewBox.width) / 2,
-      y: viewBox.y - (newHeight - viewBox.height) / 2,
-      width: newWidth,
-      height: newHeight,
-    });
-  };
-  
-  // Render links with curved paths and arrows
-  const links = useMemo(() => {
-    return bowTie.links.map((link, idx) => {
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const dx = (e.clientX - dragStart.x) * (viewBox.width / 800);
+    const dy = (e.clientY - dragStart.y) * (viewBox.height / 500);
+    setViewBox(prev => ({ ...prev, x: prev.x - dx, y: prev.y - dy }));
+    setDragStart({ x: e.clientX, y: e.clientY });
+  }, [isDragging, dragStart, viewBox]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const resetView = useCallback(() => {
+    setViewBox({ x: 0, y: 0, width: 800, height: 500 });
+  }, []);
+
+  // Render links between events
+  const renderLinks = useMemo(() => {
+    const eventMap = new Map<string, BowTieEvent>();
+    bowTie.events.forEach(e => eventMap.set(e.id, e));
+    
+    return bowTie.links.map((link, index) => {
       const fromEvent = eventMap.get(link.from);
       const toEvent = eventMap.get(link.to);
-      
       if (!fromEvent || !toEvent) return null;
       
-      const fromStatus = getEventStatus(fromEvent);
-      const toStatus = getEventStatus(toEvent);
-      const hasAlert = fromStatus !== 'normal' || toStatus !== 'normal';
-      const isConnectedToHovered = hoveredEventId === link.from || hoveredEventId === link.to;
+      const x1 = (fromEvent.position.x / 100) * 800;
+      const y1 = (fromEvent.position.y / 100) * 500;
+      const x2 = (toEvent.position.x / 100) * 800;
+      const y2 = (toEvent.position.y / 100) * 500;
       
-      // Calculate control point for curve
-      const midX = (fromEvent.position.x + toEvent.position.x) / 2;
-      const midY = (fromEvent.position.y + toEvent.position.y) / 2;
-      const dy = toEvent.position.y - fromEvent.position.y;
-      const curveOffset = Math.abs(dy) > 10 ? dy * 0.15 : 0;
+      // Create smooth bezier curve
+      const midX = (x1 + x2) / 2;
+      const path = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
       
-      const pathD = `M ${fromEvent.position.x} ${fromEvent.position.y} 
-                     Q ${midX} ${midY + curveOffset} ${toEvent.position.x} ${toEvent.position.y}`;
+      const isHighlighted = hoveredEventId === link.from || hoveredEventId === link.to;
       
       return (
-        <g key={`${link.from}-${link.to}-${idx}`}>
-          {/* Glow effect for alert/hover */}
-          {(hasAlert || isConnectedToHovered) && (
-            <path
-              d={pathD}
-              fill="none"
-              stroke={hasAlert ? 'hsl(var(--destructive))' : 'hsl(var(--primary))'}
-              strokeWidth="1.5"
-              opacity="0.3"
-              style={{ filter: 'blur(1px)' }}
-            />
-          )}
-          <path
-            d={pathD}
-            fill="none"
-            stroke={
-              isConnectedToHovered 
-                ? 'hsl(var(--primary))' 
-                : hasAlert 
-                  ? 'hsl(var(--destructive))' 
-                  : 'hsl(var(--muted-foreground) / 0.5)'
-            }
-            strokeWidth={isConnectedToHovered ? "0.6" : hasAlert ? "0.5" : "0.3"}
-            strokeDasharray={hasAlert || isConnectedToHovered ? "none" : "1,1"}
-            opacity={isConnectedToHovered ? 1 : hasAlert ? 0.9 : 0.6}
-            markerEnd="url(#arrowhead)"
-            style={{ transition: 'all 0.2s ease' }}
-          />
-        </g>
+        <path
+          key={`link-${index}`}
+          d={path}
+          fill="none"
+          stroke={isHighlighted ? '#6B7280' : '#D1D5DB'}
+          strokeWidth={isHighlighted ? 2 : 1.5}
+          strokeLinecap="round"
+          opacity={isHighlighted ? 1 : 0.7}
+        />
       );
     });
-  }, [bowTie, eventMap, tagMap, hoveredEventId]);
-  
-  return (
-    <div className="w-full h-full bg-gradient-to-br from-background to-muted/30 rounded-lg border border-border/50 overflow-hidden relative">
-      {/* Header */}
-      <div className="absolute top-2 left-3 z-10 flex items-center gap-2">
-        <div className="px-2 py-1 bg-card/80 backdrop-blur-sm rounded-md border border-border/50 shadow-sm">
-          <span className="text-sm font-medium text-foreground">{bowTie.name}</span>
-        </div>
-      </div>
+  }, [bowTie, hoveredEventId]);
+
+  // Render events
+  const renderEvents = useMemo(() => {
+    return bowTie.events.map(event => {
+      const x = (event.position.x / 100) * 800;
+      const y = (event.position.y / 100) * 500;
+      const status = getEventStatus(event);
+      const isHovered = hoveredEventId === event.id;
       
-      {/* Controls */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-card/80 backdrop-blur-sm rounded-md border border-border/50 p-1 shadow-sm">
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={zoomIn}>
-          <ZoomIn className="h-3 w-3" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={zoomOut}>
-          <ZoomOut className="h-3 w-3" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={resetView}>
-          <RotateCcw className="h-3 w-3" />
-        </Button>
+      const commonProps = {
+        event,
+        x,
+        y,
+        isHovered,
+        onClick: () => handleEventClick(event),
+        onHover: (hovered: boolean) => handleEventHover(event, hovered),
+      };
+      
+      switch (event.type) {
+        case 'hazard':
+          return <HazardBox key={event.id} {...commonProps} />;
+        case 'top_event':
+          return <TopEventCircle key={event.id} {...commonProps} status={status} />;
+        case 'barrier':
+          const isLeft = event.position.x < 50;
+          return <BarrierCylinder key={event.id} {...commonProps} status={status} isLeft={isLeft} />;
+        case 'threat':
+          return <ThreatBox key={event.id} {...commonProps} status={status} />;
+        case 'consequence':
+          return <ConsequenceBox key={event.id} {...commonProps} />;
+        case 'preventive_action':
+          return <ActionCard key={event.id} {...commonProps} isPreventive={true} />;
+        case 'mitigating_action':
+          return <ActionCard key={event.id} {...commonProps} isPreventive={false} />;
+        default:
+          return null;
+      }
+    });
+  }, [bowTie.events, hoveredEventId, getEventStatus, handleEventClick, handleEventHover]);
+
+  return (
+    <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 rounded-lg overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 bg-white/80 backdrop-blur border-b border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-400 to-red-500" />
+          <h3 className="text-sm font-semibold text-slate-700">{bowTie.name}</h3>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setViewBox(prev => ({ ...prev, width: prev.width * 0.9, height: prev.height * 0.9 }))}
+            className="p-1.5 hover:bg-slate-100 rounded text-slate-500 text-xs"
+          >
+            放大
+          </button>
+          <button
+            onClick={() => setViewBox(prev => ({ ...prev, width: prev.width * 1.1, height: prev.height * 1.1 }))}
+            className="p-1.5 hover:bg-slate-100 rounded text-slate-500 text-xs"
+          >
+            缩小
+          </button>
+          <button
+            onClick={resetView}
+            className="p-1.5 hover:bg-slate-100 rounded text-slate-500 text-xs"
+          >
+            重置
+          </button>
+        </div>
       </div>
       
       {/* SVG Canvas */}
-      <svg 
-        width="100%" 
-        height="100%" 
-        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`} 
-        preserveAspectRatio="xMidYMid meet"
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
-      >
-        <defs>
-          {/* Arrow marker */}
-          <marker
-            id="arrowhead"
-            markerWidth="4"
-            markerHeight="4"
-            refX="3"
-            refY="2"
-            orient="auto"
-          >
-            <polygon
-              points="0 0, 4 2, 0 4"
-              fill="hsl(var(--muted-foreground))"
-              opacity="0.7"
-            />
-          </marker>
+      <div className="flex-1 relative">
+        <svg
+          width="100%"
+          height="100%"
+          viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+          preserveAspectRatio="xMidYMid meet"
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+        >
+          <SvgDefs />
           
-          {/* Background pattern */}
-          <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-            <circle cx="0.3" cy="0.3" r="0.15" fill="hsl(var(--border) / 0.3)" />
-          </pattern>
-        </defs>
-        
-        {/* Background pattern */}
-        <rect x={viewBox.x - 50} y={viewBox.y - 50} width={viewBox.width + 100} height={viewBox.height + 100} fill="url(#grid)" />
-        
-        {/* Flow direction indicators */}
-        <text x="20" y="12" fontSize="2" fill="hsl(var(--muted-foreground))" fontWeight="500">
-          ← 威胁
-        </text>
-        <text x="80" y="12" fontSize="2" fill="hsl(var(--muted-foreground))" fontWeight="500" textAnchor="end">
-          后果 →
-        </text>
-        
-        {/* Center divider line */}
-        <line
-          x1="50" y1="15" x2="50" y2="95"
-          stroke="hsl(var(--border))"
-          strokeWidth="0.2"
-          strokeDasharray="2,2"
-          opacity="0.5"
-        />
-        
-        {/* Links */}
-        <g>{links}</g>
-        
-        {/* Events */}
-        {bowTie.events.map(event => (
-          <EventNode
-            key={event.id}
-            event={event}
-            status={getEventStatus(event)}
-            isHovered={hoveredEventId === event.id}
-            onClick={() => handleEventClick(event)}
-            onMouseEnter={() => handleEventHover(event)}
-            onMouseLeave={() => handleEventHover(null)}
+          {/* Background grid */}
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E2E8F0" strokeWidth="0.5" />
+            </pattern>
+          </defs>
+          <rect x="-200" y="-100" width="1200" height="700" fill="url(#grid)" />
+          
+          {/* Flow direction indicators */}
+          <text x="100" y="480" fill="#94A3B8" fontSize="12" fontWeight="500">威胁</text>
+          <text x="380" y="480" fill="#94A3B8" fontSize="12" fontWeight="500">预防</text>
+          <text x="580" y="480" fill="#94A3B8" fontSize="12" fontWeight="500">缓解</text>
+          <text x="700" y="480" fill="#94A3B8" fontSize="12" fontWeight="500">后果</text>
+          
+          {/* Central flow arrow */}
+          <path
+            d="M 80 450 L 720 450"
+            fill="none"
+            stroke="#CBD5E1"
+            strokeWidth="2"
+            strokeDasharray="8,4"
+            markerEnd="url(#arrow)"
           />
-        ))}
-      </svg>
-      
-      {/* Legend */}
-      <div className="absolute bottom-2 left-2 z-10 flex flex-wrap gap-2 bg-card/80 backdrop-blur-sm rounded-md border border-border/50 p-1.5 px-2 shadow-sm">
-        <div className="flex items-center gap-1">
-          <div className="w-2.5 h-2.5 rotate-45 bg-[hsl(210_80%_55%)]" />
-          <span className="text-[10px] text-muted-foreground">威胁</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-1.5 h-3 rounded-sm bg-[hsl(160_60%_45%)]" />
-          <span className="text-[10px] text-muted-foreground">屏障</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-[hsl(350_80%_50%)] clip-hexagon" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }} />
-          <span className="text-[10px] text-muted-foreground">顶事件</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-1.5 rounded-sm bg-[hsl(45_85%_55%)]" />
-          <span className="text-[10px] text-muted-foreground">恢复</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[6px] border-l-transparent border-r-transparent border-t-[hsl(280_60%_55%)]" />
-          <span className="text-[10px] text-muted-foreground">后果</span>
-        </div>
+          
+          {/* Links */}
+          <g>{renderLinks}</g>
+          
+          {/* Events */}
+          <g>{renderEvents}</g>
+        </svg>
       </div>
       
-      {/* Hint */}
-      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 text-[10px] text-muted-foreground/60">
-        <Move className="h-3 w-3" />
-        拖拽平移 | 滚轮缩放
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-6 px-4 py-2 bg-white/80 backdrop-blur border-t border-slate-200">
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-3 rounded" style={{ background: 'linear-gradient(45deg, #FFD60A 50%, #1a1a1a 50%)' }} />
+          <span className="text-xs text-slate-600">危害</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border-2 border-blue-500 bg-blue-50" />
+          <span className="text-xs text-slate-600">威胁</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-gradient-to-br from-orange-400 to-red-500" />
+          <span className="text-xs text-slate-600">起始事件</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-4 rounded bg-gradient-to-b from-gray-400 to-gray-600" />
+          <span className="text-xs text-slate-600">屏障</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border border-gray-300 bg-gray-50" />
+          <span className="text-xs text-slate-600">措施</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border-2 border-red-400 bg-red-50" />
+          <span className="text-xs text-slate-600">后果</span>
+        </div>
       </div>
     </div>
   );
