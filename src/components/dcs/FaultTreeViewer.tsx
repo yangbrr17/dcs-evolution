@@ -1,11 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { FaultTreeStructure, FaultTreeLink, TagData } from '@/types/dcs';
+import { Button } from '@/components/ui/button';
+import { ZoomIn, ZoomOut, RotateCcw, Move } from 'lucide-react';
 
 interface FaultTreeViewerProps {
   faultTree: FaultTreeStructure;
   tags: TagData[];
   onTagClick?: (tagId: string) => void;
   onHoveredTagChange?: (tagId: string | null) => void;
+  highlightTagId?: string | null;
 }
 
 // 计算节点位置 - 基于图的层级布局
@@ -142,7 +145,19 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
   tags,
   onTagClick,
   onHoveredTagChange,
+  highlightTagId,
 }) => {
+  // Pan and zoom state
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, width: 100, height: 100 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0, viewBoxX: 0, viewBoxY: 0 });
+  const svgRef = useRef<SVGSVGElement>(null);
+  
+  // Reset viewBox when fault tree changes
+  useEffect(() => {
+    setViewBox({ x: 0, y: 0, width: 100, height: 100 });
+  }, [faultTree.id]);
+  
   // 创建tagId到tag的映射
   const tagMap = useMemo(() => {
     const map = new Map<string, TagData>();
@@ -163,19 +178,21 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
   };
   
   // 获取节点颜色
-  const getNodeColor = (tagId: string, isTopEvent: boolean): string => {
+  const getNodeColor = (tagId: string, isTopEvent: boolean, isHighlighted: boolean): string => {
     const status = getNodeStatus(tagId);
     if (status === 'alarm') return '#ef4444';
     if (status === 'warning') return '#f59e0b';
+    if (isHighlighted) return 'hsl(var(--primary))';
     if (isTopEvent) return 'hsl(var(--primary))';
     return 'hsl(var(--muted))';
   };
   
   // 获取节点边框颜色
-  const getNodeStroke = (tagId: string): string => {
+  const getNodeStroke = (tagId: string, isHighlighted: boolean): string => {
     const status = getNodeStatus(tagId);
     if (status === 'alarm') return '#dc2626';
     if (status === 'warning') return '#d97706';
+    if (isHighlighted) return 'hsl(var(--primary))';
     return 'hsl(var(--border))';
   };
   
@@ -202,8 +219,129 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
     }
   };
   
+  // Pan handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return; // Only left mouse button
+    if ((e.target as Element).closest('g[data-node]')) return; // Don't start drag on nodes
+    
+    setIsDragging(true);
+    setDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      viewBoxX: viewBox.x,
+      viewBoxY: viewBox.y,
+    });
+  }, [viewBox.x, viewBox.y]);
+  
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isDragging || !svgRef.current) return;
+    
+    const svg = svgRef.current;
+    const rect = svg.getBoundingClientRect();
+    
+    // Calculate how much the mouse moved in SVG coordinates
+    const scaleX = viewBox.width / rect.width;
+    const scaleY = viewBox.height / rect.height;
+    
+    const dx = (e.clientX - dragStart.x) * scaleX;
+    const dy = (e.clientY - dragStart.y) * scaleY;
+    
+    setViewBox(prev => ({
+      ...prev,
+      x: dragStart.viewBoxX - dx,
+      y: dragStart.viewBoxY - dy,
+    }));
+  }, [isDragging, dragStart, viewBox.width, viewBox.height]);
+  
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+  
+  const handleMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+  
+  // Zoom handler
+  const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    
+    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+    const minSize = 30;
+    const maxSize = 200;
+    
+    setViewBox(prev => {
+      const newWidth = Math.max(minSize, Math.min(maxSize, prev.width * zoomFactor));
+      const newHeight = Math.max(minSize, Math.min(maxSize, prev.height * zoomFactor));
+      
+      // Zoom towards center
+      const widthDiff = newWidth - prev.width;
+      const heightDiff = newHeight - prev.height;
+      
+      return {
+        x: prev.x - widthDiff / 2,
+        y: prev.y - heightDiff / 2,
+        width: newWidth,
+        height: newHeight,
+      };
+    });
+  }, []);
+  
+  // Zoom controls
+  const handleZoomIn = () => {
+    setViewBox(prev => {
+      const newWidth = Math.max(30, prev.width * 0.8);
+      const newHeight = Math.max(30, prev.height * 0.8);
+      const widthDiff = newWidth - prev.width;
+      const heightDiff = newHeight - prev.height;
+      return {
+        x: prev.x - widthDiff / 2,
+        y: prev.y - heightDiff / 2,
+        width: newWidth,
+        height: newHeight,
+      };
+    });
+  };
+  
+  const handleZoomOut = () => {
+    setViewBox(prev => {
+      const newWidth = Math.min(200, prev.width * 1.25);
+      const newHeight = Math.min(200, prev.height * 1.25);
+      const widthDiff = newWidth - prev.width;
+      const heightDiff = newHeight - prev.height;
+      return {
+        x: prev.x - widthDiff / 2,
+        y: prev.y - heightDiff / 2,
+        width: newWidth,
+        height: newHeight,
+      };
+    });
+  };
+  
+  const handleReset = () => {
+    setViewBox({ x: 0, y: 0, width: 100, height: 100 });
+  };
+  
   return (
-    <div className="w-full h-full bg-background/50 rounded-lg p-2">
+    <div className="w-full h-full bg-background/50 rounded-lg p-2 relative">
+      {/* Controls */}
+      <div className="absolute top-2 right-2 z-10 flex gap-1">
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomIn} title="放大">
+          <ZoomIn className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleZoomOut} title="缩小">
+          <ZoomOut className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleReset} title="重置视图">
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      
+      {/* Drag hint */}
+      <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 text-xs text-muted-foreground bg-card/80 px-2 py-1 rounded">
+        <Move className="h-3 w-3" />
+        <span>拖拽平移 | 滚轮缩放</span>
+      </div>
+      
       <div className="text-sm font-medium mb-1 text-foreground flex items-center gap-2">
         {faultTree.name}
         <span className="text-xs text-muted-foreground">
@@ -212,10 +350,17 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
       </div>
       
       <svg 
+        ref={svgRef}
         width="100%" 
         height="calc(100% - 24px)" 
-        viewBox="0 0 100 100" 
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         preserveAspectRatio="xMidYMid meet"
+        className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onWheel={handleWheel}
       >
         <defs>
           {/* 普通箭头 */}
@@ -243,6 +388,19 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
           >
             <path d="M 0 0.15 L 3 0.9 L 0 1.65 L 0.5 0.9 Z" fill="#ef4444" />
           </marker>
+          
+          {/* 高亮箭头 */}
+          <marker
+            id="ft-arrow-highlight"
+            markerWidth="3"
+            markerHeight="1.8"
+            refX="2.7"
+            refY="0.9"
+            orient="auto"
+            markerUnits="userSpaceOnUse"
+          >
+            <path d="M 0 0.15 L 3 0.9 L 0 1.65 L 0.5 0.9 Z" fill="hsl(var(--primary))" />
+          </marker>
         </defs>
         
         {/* 绘制连接线 */}
@@ -255,6 +413,7 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
           const pathD = getCurvedPath(fromPos.x, fromPos.y, toPos.x, toPos.y);
           const labelPos = getCurvePointAt(fromPos.x, fromPos.y, toPos.x, toPos.y, 0.5);
           const isHighContribution = link.contribution >= 50;
+          const isHighlighted = highlightTagId && (link.from === highlightTagId || link.to === highlightTagId);
           
           return (
             <g key={`link-${idx}`}>
@@ -262,12 +421,12 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
               <path
                 d={pathD}
                 fill="none"
-                stroke={isHighContribution ? '#ef4444' : '#9ca3af'}
-                strokeWidth={isHighContribution ? 0.5 : 0.35}
+                stroke={isHighlighted ? 'hsl(var(--primary))' : isHighContribution ? '#ef4444' : '#9ca3af'}
+                strokeWidth={isHighlighted ? 0.6 : isHighContribution ? 0.5 : 0.35}
                 strokeOpacity={0.8}
                 strokeLinecap="round"
-                strokeDasharray="1.5 0.8"
-                markerEnd={`url(#ft-arrow-${isHighContribution ? 'critical' : 'normal'})`}
+                strokeDasharray={isHighlighted ? 'none' : '1.5 0.8'}
+                markerEnd={`url(#ft-arrow-${isHighlighted ? 'highlight' : isHighContribution ? 'critical' : 'normal'})`}
                 className={isHighContribution ? 'animate-pulse' : ''}
               />
               
@@ -279,8 +438,8 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
                   width="8"
                   height="3"
                   rx="0.5"
-                  fill={isHighContribution ? '#fef2f2' : '#f9fafb'}
-                  stroke={isHighContribution ? '#fca5a5' : '#e5e7eb'}
+                  fill={isHighlighted ? 'hsl(var(--primary) / 0.1)' : isHighContribution ? '#fef2f2' : '#f9fafb'}
+                  stroke={isHighlighted ? 'hsl(var(--primary))' : isHighContribution ? '#fca5a5' : '#e5e7eb'}
                   strokeWidth="0.15"
                 />
                 <text
@@ -289,7 +448,7 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
                   textAnchor="middle"
                   fontSize="1.6"
                   fontWeight="500"
-                  fill={isHighContribution ? '#dc2626' : '#6b7280'}
+                  fill={isHighlighted ? 'hsl(var(--primary))' : isHighContribution ? '#dc2626' : '#6b7280'}
                 >
                   {link.contribution}%
                 </text>
@@ -304,6 +463,7 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
           if (!pos) return null;
           
           const isTopEvent = tagId === faultTree.topEventTagId;
+          const isHighlighted = highlightTagId === tagId;
           const tag = tagMap.get(tagId);
           const status = getNodeStatus(tagId);
           const nodeSize = isTopEvent ? 6 : 4.5;
@@ -311,11 +471,27 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
           return (
             <g
               key={tagId}
+              data-node
               className="cursor-pointer"
               onClick={() => handleNodeClick(tagId)}
               onMouseEnter={() => handleNodeHover(tagId)}
               onMouseLeave={() => handleNodeHover(null)}
             >
+              {/* 高亮光晕 */}
+              {isHighlighted && (
+                <rect
+                  x={pos.x - nodeSize - 1}
+                  y={pos.y - nodeSize * 0.6 - 1}
+                  width={nodeSize * 2 + 2}
+                  height={nodeSize * 1.2 + 2}
+                  rx="1.5"
+                  fill="none"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth="0.4"
+                  className="animate-pulse"
+                />
+              )}
+              
               {/* 节点背景 - 圆角矩形 */}
               <rect
                 x={pos.x - nodeSize}
@@ -323,10 +499,10 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
                 width={nodeSize * 2}
                 height={nodeSize * 1.2}
                 rx="1"
-                fill={getNodeColor(tagId, isTopEvent)}
-                stroke={getNodeStroke(tagId)}
-                strokeWidth={isTopEvent ? 0.5 : 0.3}
-                className={status !== 'normal' ? 'animate-pulse' : ''}
+                fill={getNodeColor(tagId, isTopEvent, isHighlighted)}
+                stroke={getNodeStroke(tagId, isHighlighted)}
+                strokeWidth={isHighlighted ? 0.6 : isTopEvent ? 0.5 : 0.3}
+                className={status !== 'normal' || isHighlighted ? 'animate-pulse' : ''}
               />
               
               {/* 位号 */}
@@ -336,7 +512,7 @@ export const FaultTreeViewer: React.FC<FaultTreeViewerProps> = ({
                 textAnchor="middle"
                 fontSize={isTopEvent ? 2.2 : 1.8}
                 fontWeight="600"
-                fill={status !== 'normal' ? '#ffffff' : 'hsl(var(--foreground))'}
+                fill={status !== 'normal' || isHighlighted ? '#ffffff' : 'hsl(var(--foreground))'}
               >
                 {tagId}
               </text>

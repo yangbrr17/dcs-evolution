@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronUp, ChevronDown, GitBranch, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FaultTreeViewer } from './FaultTreeViewer';
 import { BowTieViewer } from './BowTieViewer';
-import { getFaultTreesForArea } from '@/services/faultTreeService';
+import { getFaultTreesForArea, findFaultTreeByTagId } from '@/services/faultTreeService';
 import { getBowTiesForArea } from '@/services/bowTieService';
 import { TagData, BowTieEvent } from '@/types/dcs';
 
@@ -13,6 +13,13 @@ interface SafetyAnalysisPanelProps {
   tags: TagData[];
   onTagClick?: (tagId: string) => void;
   onHoveredAlarmTagChange?: (tagId: string | null) => void;
+  
+  // External control
+  isExpanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
+  activeTab?: 'fault-tree' | 'bow-tie';
+  onActiveTabChange?: (tab: string) => void;
+  targetTagId?: string | null;
 }
 
 export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
@@ -20,9 +27,34 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
   tags,
   onTagClick,
   onHoveredAlarmTagChange,
+  isExpanded: externalExpanded,
+  onExpandedChange,
+  activeTab: externalActiveTab,
+  onActiveTabChange,
+  targetTagId,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState('fault-tree');
+  // Use internal state if not controlled externally
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const [internalActiveTab, setInternalActiveTab] = useState('fault-tree');
+  
+  const isExpanded = externalExpanded !== undefined ? externalExpanded : internalExpanded;
+  const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
+  
+  const setIsExpanded = (value: boolean) => {
+    if (onExpandedChange) {
+      onExpandedChange(value);
+    } else {
+      setInternalExpanded(value);
+    }
+  };
+  
+  const setActiveTab = (value: string) => {
+    if (onActiveTabChange) {
+      onActiveTabChange(value);
+    } else {
+      setInternalActiveTab(value);
+    }
+  };
   
   const faultTrees = useMemo(() => getFaultTreesForArea(areaId), [areaId]);
   const bowTies = useMemo(() => getBowTiesForArea(areaId), [areaId]);
@@ -31,10 +63,23 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
   const [selectedBowTieIdx, setSelectedBowTieIdx] = useState(0);
   
   // Reset selection when area changes
-  React.useEffect(() => {
+  useEffect(() => {
     setSelectedFaultTreeIdx(0);
     setSelectedBowTieIdx(0);
   }, [areaId]);
+  
+  // When targetTagId changes, find and select the corresponding fault tree
+  useEffect(() => {
+    if (targetTagId && faultTrees.length > 0) {
+      const matchingTree = findFaultTreeByTagId(targetTagId, areaId);
+      if (matchingTree) {
+        const idx = faultTrees.findIndex(ft => ft.id === matchingTree.id);
+        if (idx !== -1) {
+          setSelectedFaultTreeIdx(idx);
+        }
+      }
+    }
+  }, [targetTagId, areaId, faultTrees]);
   
   const currentFaultTree = faultTrees[selectedFaultTreeIdx];
   const currentBowTie = bowTies[selectedBowTieIdx];
@@ -85,11 +130,11 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="fault-tree" className="flex-1 mt-2">
+            <TabsContent value="fault-tree" className="flex-1 mt-2 overflow-hidden">
               {faultTrees.length > 0 ? (
                 <div className="h-full flex flex-col">
                   {faultTrees.length > 1 && (
-                    <div className="flex gap-2 mb-2">
+                    <div className="flex gap-2 mb-2 flex-wrap">
                       {faultTrees.map((ft, idx) => (
                         <Button
                           key={ft.id}
@@ -103,12 +148,13 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
                     </div>
                   )}
                   {currentFaultTree && (
-                    <div className="flex-1">
+                    <div className="flex-1 overflow-hidden">
                       <FaultTreeViewer
                         faultTree={currentFaultTree}
                         tags={tags}
                         onTagClick={onTagClick}
                         onHoveredTagChange={onHoveredAlarmTagChange}
+                        highlightTagId={targetTagId}
                       />
                     </div>
                   )}
@@ -120,11 +166,11 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
               )}
             </TabsContent>
             
-            <TabsContent value="bow-tie" className="flex-1 mt-2">
+            <TabsContent value="bow-tie" className="flex-1 mt-2 overflow-hidden">
               {bowTies.length > 0 ? (
                 <div className="h-full flex flex-col">
                   {bowTies.length > 1 && (
-                    <div className="flex gap-2 mb-2">
+                    <div className="flex gap-2 mb-2 flex-wrap">
                       {bowTies.map((bt, idx) => (
                         <Button
                           key={bt.id}
@@ -138,7 +184,7 @@ export const SafetyAnalysisPanel: React.FC<SafetyAnalysisPanelProps> = ({
                     </div>
                   )}
                   {currentBowTie && (
-                    <div className="flex-1">
+                    <div className="flex-1 overflow-hidden">
                       <BowTieViewer
                         bowTie={currentBowTie}
                         tags={tags}
