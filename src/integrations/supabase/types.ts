@@ -301,6 +301,30 @@ export type Database = {
         }
         Relationships: []
       }
+      tag_history: {
+        Row: {
+          created_at: string | null
+          id: string
+          tag_id: string
+          timestamp: string
+          value: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          tag_id: string
+          timestamp: string
+          value: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          tag_id?: string
+          timestamp?: string
+          value?: number
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
