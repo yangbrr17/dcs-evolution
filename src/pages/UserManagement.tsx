@@ -79,7 +79,7 @@ const UserManagement: React.FC = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [newUser, setNewUser] = useState<CreateUserData>({
-    email: '',
+    username: '',
     password: '',
     name: '',
     employee_id: '',
@@ -170,8 +170,15 @@ const UserManagement: React.FC = () => {
 
   // Create user handlers
   const handleCreateUser = async () => {
-    if (!newUser.email || !newUser.password || !newUser.name) {
-      toast.error('请填写必填项：邮箱、密码、姓名');
+    if (!newUser.username || !newUser.password || !newUser.name) {
+      toast.error('请填写必填项：用户名、密码、姓名');
+      return;
+    }
+
+    // Validate username format (alphanumeric and underscore only)
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(newUser.username)) {
+      toast.error('用户名只能包含字母、数字和下划线');
       return;
     }
 
@@ -186,7 +193,7 @@ const UserManagement: React.FC = () => {
       toast.success('用户创建成功');
       setCreateDialogOpen(false);
       setNewUser({
-        email: '',
+        username: '',
         password: '',
         name: '',
         employee_id: '',
@@ -449,13 +456,13 @@ const UserManagement: React.FC = () => {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">邮箱 *</Label>
+              <Label htmlFor="username">用户名 * （字母、数字、下划线）</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="user@example.com"
-                value={newUser.email}
-                onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                id="username"
+                type="text"
+                placeholder="例如：ybr21"
+                value={newUser.username}
+                onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
               />
             </div>
             <div className="grid gap-2">

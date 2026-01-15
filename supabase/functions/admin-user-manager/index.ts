@@ -5,8 +5,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Convert username to internal email format
+const usernameToEmail = (username: string): string => {
+  return `${username.toLowerCase().trim()}@internal.local`;
+};
+
 interface CreateUserData {
-  email: string;
+  username: string;
   password: string;
   name: string;
   employee_id?: string;
@@ -93,13 +98,17 @@ Deno.serve(async (req) => {
       case 'createUser': {
         const userData = data as CreateUserData;
         
+        // Convert username to internal email
+        const email = usernameToEmail(userData.username);
+        
         // Create user with admin API
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-          email: userData.email,
+          email,
           password: userData.password,
           email_confirm: true, // Skip email verification
           user_metadata: {
             name: userData.name,
+            username: userData.username.toLowerCase().trim(),
             employee_id: userData.employee_id || null,
             department: userData.department || null,
           },
@@ -107,8 +116,12 @@ Deno.serve(async (req) => {
 
         if (createError) {
           console.error('Create user error:', createError);
+          // Handle duplicate username error
+          const errorMessage = createError.message.includes('already been registered')
+            ? '该用户名已被使用'
+            : createError.message;
           return new Response(
-            JSON.stringify({ error: createError.message }),
+            JSON.stringify({ error: errorMessage }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
