@@ -1,0 +1,226 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface CreateUserData {
+  email: string;
+  password: string;
+  name: string;
+  employee_id?: string;
+  department?: string;
+  role?: 'admin' | 'operator' | 'viewer';
+}
+
+interface UpdatePasswordData {
+  userId: string;
+  newPassword: string;
+}
+
+interface UpdateProfileData {
+  userId: string;
+  name?: string;
+  employee_id?: string;
+  department?: string;
+}
+
+interface DeleteUserData {
+  userId: string;
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    // Get the authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create Supabase client with user's token for verification
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Get the calling user
+    const { data: { user: callingUser }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !callingUser) {
+      console.error('Auth error:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create admin client for privileged operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Check if calling user is admin
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', callingUser.id)
+      .single();
+
+    if (roleError || roleData?.role !== 'admin') {
+      console.error('Role check failed:', roleError, roleData);
+      return new Response(
+        JSON.stringify({ error: 'Only administrators can perform this action' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse request body
+    const { action, data } = await req.json();
+    console.log('Action:', action, 'Data:', data);
+
+    switch (action) {
+      case 'createUser': {
+        const userData = data as CreateUserData;
+        
+        // Create user with admin API
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+          email: userData.email,
+          password: userData.password,
+          email_confirm: true, // Skip email verification
+          user_metadata: {
+            name: userData.name,
+            employee_id: userData.employee_id || null,
+            department: userData.department || null,
+          },
+        });
+
+        if (createError) {
+          console.error('Create user error:', createError);
+          return new Response(
+            JSON.stringify({ error: createError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // If a non-default role was specified, update it
+        if (userData.role && userData.role !== 'viewer' && newUser.user) {
+          const { error: roleUpdateError } = await supabaseAdmin
+            .from('user_roles')
+            .update({ role: userData.role })
+            .eq('user_id', newUser.user.id);
+
+          if (roleUpdateError) {
+            console.error('Role update error:', roleUpdateError);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, user: newUser.user }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'deleteUser': {
+        const deleteData = data as DeleteUserData;
+
+        // Prevent self-deletion
+        if (deleteData.userId === callingUser.id) {
+          return new Response(
+            JSON.stringify({ error: 'Cannot delete your own account' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Delete user (cascade will handle profile and roles)
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(
+          deleteData.userId
+        );
+
+        if (deleteError) {
+          console.error('Delete user error:', deleteError);
+          return new Response(
+            JSON.stringify({ error: deleteError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'updatePassword': {
+        const passwordData = data as UpdatePasswordData;
+
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+          passwordData.userId,
+          { password: passwordData.newPassword }
+        );
+
+        if (updateError) {
+          console.error('Update password error:', updateError);
+          return new Response(
+            JSON.stringify({ error: updateError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'updateProfile': {
+        const profileData = data as UpdateProfileData;
+
+        const updateFields: Record<string, string | null> = {};
+        if (profileData.name !== undefined) updateFields.name = profileData.name;
+        if (profileData.employee_id !== undefined) updateFields.employee_id = profileData.employee_id || null;
+        if (profileData.department !== undefined) updateFields.department = profileData.department || null;
+
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update(updateFields)
+          .eq('id', profileData.userId);
+
+        if (updateError) {
+          console.error('Update profile error:', updateError);
+          return new Response(
+            JSON.stringify({ error: updateError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      default:
+        return new Response(
+          JSON.stringify({ error: 'Unknown action' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
