@@ -8,6 +8,7 @@ import { saveTagPosition, applyStoredPositions } from '@/services/tagPositionSer
 import { findCausalChain } from '@/services/causalityService';
 import { startShift } from '@/services/shiftService';
 import { fetchProcessAreas, uploadProcessImage, removeProcessImage } from '@/services/processAreaService';
+import { loadTagHistory, hasRealHistoryData } from '@/services/tagDataService';
 import { useAuth } from '@/contexts/AuthContext';
 import ProcessImageBackground from './ProcessImageBackground';
 import DraggableTag from './DraggableTag';
@@ -20,10 +21,11 @@ import UserMenu from './UserMenu';
 import ShiftHandover from './ShiftHandover';
 import OperationLogPanel from './OperationLogPanel';
 import SafetyAnalysisPanel from './SafetyAnalysisPanel';
+import { DataImportDialog } from './DataImportDialog';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Play, Pause, Bell, Clock } from 'lucide-react';
+import { Settings, Play, Pause, Bell, Clock, Upload } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const DCSInterface: React.FC = () => {
@@ -36,7 +38,9 @@ const DCSInterface: React.FC = () => {
   const [isRunning, setIsRunning] = useState(true);
   const [selectedTag, setSelectedTag] = useState<TagData | null>(null);
   const [showShiftHandover, setShowShiftHandover] = useState(false);
+  const [showDataImport, setShowDataImport] = useState(false);
   const [hoveredAlarmTagId, setHoveredAlarmTagId] = useState<string | null>(null);
+  const [hasRealData, setHasRealData] = useState(false);
   
   // Safety analysis panel state
   const [safetyPanelExpanded, setSafetyPanelExpanded] = useState(false);
@@ -87,6 +91,33 @@ const DCSInterface: React.FC = () => {
       }
     };
     loadAreas();
+  }, []);
+
+  // Check for real history data
+  useEffect(() => {
+    const checkRealData = async () => {
+      const hasData = await hasRealHistoryData();
+      setHasRealData(hasData);
+      
+      if (hasData) {
+        // Load real history data for all tags
+        setAllTags(prevTags => {
+          // Load history for each tag asynchronously
+          prevTags.forEach(async (tag) => {
+            const history = await loadTagHistory(tag.id, 30);
+            if (history.length > 0) {
+              setAllTags(current => 
+                current.map(t => 
+                  t.id === tag.id ? { ...t, history } : t
+                )
+              );
+            }
+          });
+          return prevTags;
+        });
+      }
+    };
+    checkRealData();
   }, []);
 
   // Load alarms from database on mount
@@ -356,6 +387,19 @@ const DCSInterface: React.FC = () => {
             </Button>
           )}
           
+          {/* Data Import - Only for admins */}
+          {role === 'admin' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowDataImport(true)}
+              className="gap-1"
+            >
+              <Upload className="w-3 h-3" />
+              导入数据
+            </Button>
+          )}
+          
           {/* User Menu */}
           <UserMenu onShiftHandover={() => setShowShiftHandover(true)} />
         </div>
@@ -491,6 +535,29 @@ const DCSInterface: React.FC = () => {
         isOpen={showShiftHandover}
         onClose={() => setShowShiftHandover(false)}
         alarms={alarms}
+      />
+
+      {/* Data Import Dialog */}
+      <DataImportDialog
+        open={showDataImport}
+        onClose={() => setShowDataImport(false)}
+        onImportComplete={async () => {
+          // Reload history data after import
+          const hasData = await hasRealHistoryData();
+          setHasRealData(hasData);
+          if (hasData) {
+            allTags.forEach(async (tag) => {
+              const history = await loadTagHistory(tag.id, 30);
+              if (history.length > 0) {
+                setAllTags(current => 
+                  current.map(t => 
+                    t.id === tag.id ? { ...t, history } : t
+                  )
+                );
+              }
+            });
+          }
+        }}
       />
     </div>
   );
