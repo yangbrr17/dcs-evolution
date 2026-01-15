@@ -1,10 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
-import { AppRole } from '@/contexts/AuthContext';
+import { AppRole, usernameToEmail } from '@/contexts/AuthContext';
 
 export interface UserWithRole {
   id: string;
   name: string;
-  email?: string;
+  username?: string;
   employee_id: string | null;
   department: string | null;
   role: AppRole;
@@ -12,7 +12,7 @@ export interface UserWithRole {
 }
 
 export interface CreateUserData {
-  email: string;
+  username: string;
   password: string;
   name: string;
   employee_id?: string;

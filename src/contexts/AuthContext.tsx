@@ -4,6 +4,11 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type AppRole = 'admin' | 'operator' | 'viewer';
 
+// Helper to convert username to internal email format
+export const usernameToEmail = (username: string): string => {
+  return `${username.toLowerCase().trim()}@internal.local`;
+};
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -19,8 +24,8 @@ export interface AuthContextType {
   profile: UserProfile | null;
   role: AppRole | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, name: string, employeeId?: string, department?: string) => Promise<{ error: Error | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (username: string, password: string, name: string, employeeId?: string, department?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   canEdit: () => boolean;
   canAcknowledge: () => boolean;
@@ -112,7 +117,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
+    const email = usernameToEmail(username);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -121,12 +127,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signUp = async (
-    email: string, 
+    username: string, 
     password: string, 
     name: string, 
     employeeId?: string, 
     department?: string
   ) => {
+    const email = usernameToEmail(username);
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -136,6 +143,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         emailRedirectTo: redirectUrl,
         data: {
           name,
+          username: username.toLowerCase().trim(),
           employee_id: employeeId,
           department,
         },
