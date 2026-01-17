@@ -42,7 +42,57 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get the authorization header
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Create admin client for privileged operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Parse request body
+    const { action, data } = await req.json();
+    console.log('Action:', action);
+
+    // Special recovery action - no auth required (for emergency recovery only)
+    if (action === 'recoveryResetPassword') {
+      const { userName, newPassword } = data as { userName: string; newPassword: string };
+      
+      // Find user by name in profiles
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('name', userName)
+        .single();
+
+      if (profileError || !profile) {
+        return new Response(
+          JSON.stringify({ error: `User "${userName}" not found` }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+        profile.id,
+        { password: newPassword }
+      );
+
+      if (updateError) {
+        console.error('Recovery reset password error:', updateError);
+        return new Response(
+          JSON.stringify({ error: updateError.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: `Password reset for user "${userName}"` }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // For all other actions, require authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -50,11 +100,6 @@ Deno.serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Create Supabase client with user's token for verification
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -70,11 +115,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create admin client for privileged operations
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
     // Check if calling user is admin
     const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
@@ -89,10 +129,6 @@ Deno.serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Parse request body
-    const { action, data } = await req.json();
-    console.log('Action:', action, 'Data:', data);
 
     switch (action) {
       case 'createUser': {
