@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
     // Special recovery action - no auth required (for emergency recovery only)
     if (action === 'recoveryResetPassword') {
-      const { userName, newPassword } = data as { userName: string; newPassword: string };
+      const { userName, newPassword, newUsername } = data as { userName: string; newPassword: string; newUsername?: string };
       
       // Find user by name in profiles
       const { data: profile, error: profileError } = await supabaseAdmin
@@ -73,9 +73,21 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Get the user's actual email from auth.users
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+      console.log('Auth user info:', authUser?.user?.email);
+
+      // Build update object
+      const updateData: { password: string; email?: string } = { password: newPassword };
+      
+      // If newUsername provided, also update email to the internal format
+      if (newUsername) {
+        updateData.email = usernameToEmail(newUsername);
+      }
+
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
         profile.id,
-        { password: newPassword }
+        updateData
       );
 
       if (updateError) {
@@ -87,7 +99,7 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, message: `Password reset for user "${userName}"` }),
+        JSON.stringify({ success: true, message: `Password reset for user "${userName}"`, oldEmail: authUser?.user?.email, newEmail: updateData.email }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
